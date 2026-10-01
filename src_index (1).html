@@ -1,0 +1,2391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>brikkin Influencer Pool - Multi-User Collaborative OS</title>
+  
+  <!-- Tailwind CSS & FontAwesome Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <!-- SheetJS for Client-Side Excel / CSV Parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- html2pdf.js for Clean, Non-Overlapping PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <!-- Firebase Compat SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-database-compat.js"></script>
+
+  <style>
+    .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+
+    /* PDF Strict Formatting Rules */
+    .pdf-page-container {
+      width: 100% !important;
+      max-width: 800px !important;
+      margin: 0 auto !important;
+      background: #ffffff !important;
+      color: #0f172a !important;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    }
+    .pdf-card-item {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      margin-bottom: 14px !important;
+      border: 1px solid #e2e8f0 !important;
+      border-radius: 12px !important;
+      padding: 14px !important;
+      background: #ffffff !important;
+      box-sizing: border-box !important;
+    }
+    .pdf-header-block {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      margin-bottom: 20px !important;
+    }
+
+    @media print {
+      body * { visibility: hidden; }
+      #deckPrintableArea, #deckPrintableArea * { visibility: visible; }
+      #deckPrintableArea { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 15px; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans min-h-screen flex flex-col pb-28">
+
+  <!-- ================= AUTHENTICATION MODAL ================= -->
+  <div id="authSection" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+    <div class="relative w-full max-w-md bg-white rounded-3xl shadow-2xl p-8 border border-slate-200">
+      
+      <!-- brikkin Project Header -->
+      <div class="text-center space-y-3">
+        <div class="inline-flex p-3 rounded-2xl bg-black shadow-xl border border-slate-800 items-center justify-center">
+          <span class="text-2xl font-black text-emerald-500 tracking-tight font-sans">brikkin</span>
+        </div>
+        <div>
+          <h2 class="text-xl font-black text-slate-900 tracking-tight">Collaborative Influencer OS</h2>
+          <p class="text-xs text-emerald-600 font-semibold tracking-wide mt-0.5">Where creators, campaigns, and conversations come together.</p>
+        </div>
+      </div>
+
+      <div class="mt-6 flex bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200">
+        <button type="button" id="authTabLogin" onclick="setAuthMode('login')" class="flex-1 py-2 rounded-lg transition bg-white text-indigo-700 shadow-sm">
+          Sign In
+        </button>
+        <button type="button" id="authTabRegister" style="display:none" onclick="setAuthMode('register')" class="flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-900">
+          Create Account
+        </button>
+      </div>
+
+      <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="mt-5 space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">Email</label>
+          <input required id="loginId" type="text" placeholder="you@company.com" class="w-full text-sm p-3 border border-slate-300 rounded-xl bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">Password</label>
+          <input required id="loginPassword" type="password" placeholder="Enter password" class="w-full text-sm p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <div id="loginError" class="hidden text-[11px] text-red-600 font-semibold bg-red-50 p-2.5 rounded-xl border border-red-200"></div>
+        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-2 text-sm">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Login to Shared Workspace
+        </button>
+      </form>
+
+      <form id="registerForm" onsubmit="handleRegisterSubmit(event)" class="mt-5 space-y-3.5 text-xs hidden">
+        <div>
+          <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">Full Name *</label>
+          <input required id="regFullName" type="text" placeholder="e.g. Priyanshu Sharma" class="w-full text-sm p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">User ID / Handle *</label>
+          <input required id="regUserId" type="text" placeholder="e.g. priyanshu" class="w-full text-sm p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">Role *</label>
+            <input required id="regRole" type="text" placeholder="e.g. Sourcing Lead" class="w-full text-sm p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">Email</label>
+            <input id="regEmail" type="email" placeholder="name@insomniacs.in" class="w-full text-sm p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">Password *</label>
+          <input required id="regPassword" type="password" placeholder="Create password" class="w-full text-sm p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1">Confirm Password *</label>
+          <input required id="regConfirmPassword" type="password" placeholder="Re-type password" class="w-full text-sm p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <div id="registerError" class="hidden text-[11px] text-red-600 font-semibold bg-red-50 p-2.5 rounded-xl border border-red-200"></div>
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-600/25 transition flex items-center justify-center gap-2 text-sm">
+          <i class="fa-solid fa-user-check"></i> Register Account
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MAIN DASHBOARD SHELL ================= -->
+  <div id="appContainer" class="hidden min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
+      <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap justify-between items-center gap-3">
+        
+        <!-- Left: brikkin Project Identification -->
+        <div class="flex items-center space-x-3">
+          <div class="bg-black px-3 py-1 rounded-xl border border-slate-800 shadow-inner flex items-center">
+            <span class="text-lg font-black text-emerald-500 tracking-tight font-sans">brikkin</span>
+          </div>
+          <div class="hidden sm:block">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-300">Influencer Pool</span>
+              <span id="syncStatusBadge" class="bg-emerald-500/20 text-emerald-300 text-[10px] px-2 py-0.5 rounded-full font-bold border border-emerald-500/30 flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Cloud Synced
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-400 font-medium">Real-time team collaborative workspace.</p>
+          </div>
+        </div>
+
+        <!-- Center: brikkin Clean Pill Badge -->
+        <div class="hidden lg:flex items-center bg-[#0c0d0e]/95 border border-emerald-500/35 shadow-[0_0_15px_rgba(16,185,129,0.15)] rounded-full px-4 py-1.5 select-none">
+          <div class="flex items-center gap-2">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+            </span>
+            <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">POWERED BY</span>
+            <span class="text-xs font-black text-emerald-500 tracking-tight font-sans ml-1">brikkin</span>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs & Actions -->
+        <div class="flex items-center gap-2">
+          <div class="flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700 text-xs">
+            <button type="button" onclick="switchView('creators')" id="tabBtnCreators" class="px-2.5 py-1.5 rounded-lg font-bold transition bg-indigo-600 text-white">
+              <i class="fa-solid fa-users mr-1"></i> Creators (<span id="navCreatorCount">0</span>)
+            </button>
+            <button type="button" onclick="switchView('regions')" id="tabBtnRegions" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-300 hover:text-white transition">
+              <i class="fa-solid fa-city mr-1 text-emerald-400"></i> Region Hubs
+            </button>
+            <button type="button" onclick="switchView('suggest')" id="tabBtnSuggest" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-300 hover:text-white transition">
+              <i class="fa-solid fa-wand-magic-sparkles mr-1 text-amber-300"></i> AI Match
+            </button>
+            <button type="button" onclick="switchView('brands')" id="tabBtnBrands" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-300 hover:text-white transition">
+              <i class="fa-solid fa-briefcase mr-1"></i> Projects (<span id="navBrandCount">0</span>)
+            </button>
+            <button type="button" onclick="switchView('team')" id="tabBtnTeam" class="px-2.5 py-1.5 rounded-lg font-bold text-slate-300 hover:text-white transition">
+              <i class="fa-solid fa-user-gear mr-1"></i> Team (<span id="navTeamCount">0</span>)
+            </button>
+          </div>
+
+          <button type="button" onclick="openDeckModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+            <i class="fa-solid fa-file-powerpoint text-amber-300"></i> Deck (<span id="navDeckCount">0</span>)
+          </button>
+          <button type="button" onclick="openBulkModal()" class="bg-slate-700 hover:bg-slate-600 text-white text-xs font-semibold px-2.5 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+            <i class="fa-solid fa-file-arrow-up"></i> Bulk
+          </button>
+          <button type="button" onclick="openAddCreatorModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-2.5 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+            <i class="fa-solid fa-user-plus"></i> + Creator
+          </button>
+          <button type="button" onclick="openAddBrandModal()" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-2.5 py-2 rounded-lg flex items-center gap-1.5 shadow transition">
+            <i class="fa-solid fa-plus"></i> + Project
+          </button>
+
+          <!-- User Badge -->
+          <div class="pl-2 border-l border-slate-700 flex items-center gap-1.5">
+            <div class="flex items-center gap-2 bg-slate-800 px-2.5 py-1 rounded-xl border border-slate-700">
+              <div class="w-5 h-5 rounded-full bg-amber-400 text-slate-900 font-bold flex items-center justify-center text-[10px]" id="userAvatar">U</div>
+              <span class="text-xs font-bold text-slate-200 block leading-tight max-w-[70px] truncate" id="currentUserName">User</span>
+            </div>
+            <button type="button" onclick="shareWorkspace()" title="Share my work" class="text-slate-400 hover:text-indigo-400 p-1.5"><i class="fa-solid fa-share-nodes"></i></button>
+            <button type="button" onclick="openSharedWorkspace()" title="Open shared work" class="text-slate-400 hover:text-indigo-400 p-1.5"><i class="fa-solid fa-inbox"></i></button>
+            <button type="button" onclick="logoutUser()" title="Sign Out" class="text-slate-400 hover:text-red-400 p-1.5 transition">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-1 space-y-6 w-full">
+
+      <!-- ================= VIEW 1: CREATOR HUB ================= -->
+      <div id="viewCreators" class="space-y-6"><div class="flex justify-end py-2"><button type="button" onclick="clearAllCreators()" class="text-xs font-bold text-red-600 border border-red-200 rounded-xl px-3 py-2 hover:bg-red-50"><i class="fa-solid fa-trash-can mr-1"></i> Delete All Creator Data</button><label id="contact-import-control" class="ml-3 text-xs font-bold text-indigo-700 cursor-pointer">Import private contacts<input type="file" accept=".json" class="hidden" onchange="importContacts(this)"></label></div>
+
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Creators in Pool</div>
+            <div class="text-2xl font-black text-slate-900 mt-1" id="kpiTotal">0</div>
+            <div class="text-[11px] text-emerald-600 font-semibold mt-0.5"><i class="fa-solid fa-circle-check"></i> Master Sheet Loaded</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Creators in Deck</div>
+            <div class="text-2xl font-black text-indigo-600 mt-1" id="kpiSelectedCount">0</div>
+            <div class="text-[11px] text-indigo-500 font-semibold mt-0.5">Shortlisted for pitch</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Deck Cost</div>
+            <div class="text-2xl font-black text-emerald-600 mt-1 font-mono" id="kpiDeckBudget">₹0</div>
+            <div class="text-[11px] text-slate-500 mt-0.5" id="kpiAvgRate">Avg: ₹0 / creator</div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Active Campaigns</div>
+            <div class="text-2xl font-black text-amber-600 mt-1" id="kpiBrandCount">0</div>
+            <div class="text-[11px] text-slate-500 mt-0.5" id="kpiBrandSub">Tracked briefs</div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Bar with Dedicated Location Input -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+          <div class="flex flex-wrap gap-3 items-center justify-between">
+            
+            <div class="flex-1 min-w-[220px] relative">
+              <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-xs"></i>
+              <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Search creator handle, phone, niche, commercials..." class="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"/>
+            </div>
+
+            <div class="flex-1 min-w-[220px] relative">
+              <i class="fa-solid fa-location-dot absolute left-3.5 top-3 text-red-500 text-xs"></i>
+              <input type="text" id="searchLocationInput" oninput="applyFilters()" placeholder="Search City, State, or Area (e.g. Mumbai, Gurgaon)..." class="w-full pl-9 pr-7 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50/50" />
+              <button type="button" onclick="document.getElementById('searchLocationInput').value=''; applyFilters();" class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs" title="Clear Location">
+                <i class="fa-solid fa-circle-xmark"></i>
+              </button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <select id="filterCity" onchange="syncLocationDropdown(this.value)" class="text-xs py-2 px-3 border border-slate-300 rounded-xl bg-white text-slate-700 font-semibold">
+                <option value="">Quick Select City</option>
+                <option value="Mumbai">Mumbai</option>
+                <option value="Bengaluru">Bengaluru</option>
+                <option value="Delhi NCR">Delhi NCR</option>
+                <option value="Pune">Pune</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Ahmedabad / Gujarat">Ahmedabad</option>
+                <option value="Kolkata">Kolkata</option>
+              </select>
+
+              <select id="filterTier" onchange="applyFilters()" class="text-xs py-2 px-3 border border-slate-300 rounded-xl bg-white text-slate-700">
+                <option value="">All Tiers</option>
+                <option value="Nano">Nano (1K-10K)</option>
+                <option value="Micro">Micro (10K-100K)</option>
+                <option value="Mid Tier">Mid Tier (100K-500K)</option>
+                <option value="Macro">Macro (500K-1M)</option>
+                <option value="Mega">Mega (1M+)</option>
+              </select>
+
+              <button type="button" onclick="selectAllFiltered(true)" class="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-2 rounded-xl transition flex items-center gap-1">
+                <i class="fa-solid fa-check-double"></i> Select All Filtered
+              </button>
+
+              <span id="recordBadge" class="text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-2 rounded-xl">
+                Showing 0 Creators
+              </span>
+            </div>
+
+          </div>
+
+          <!-- Location Quick Chips -->
+          <div class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-100">
+            <span class="text-[11px] font-bold text-slate-400 mr-1 flex items-center gap-1">
+              <i class="fa-solid fa-street-view text-indigo-500"></i> Popular Cities:
+            </span>
+            <button type="button" onclick="quickFilterCity('Mumbai')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition">Mumbai</button>
+            <button type="button" onclick="quickFilterCity('Bengaluru')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition">Bengaluru</button>
+            <button type="button" onclick="quickFilterCity('Delhi NCR')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition">Delhi NCR</button>
+            <button type="button" onclick="quickFilterCity('Pune')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition">Pune</button>
+            <button type="button" onclick="quickFilterCity('Hyderabad')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition">Hyderabad</button>
+            <button type="button" onclick="quickFilterCity('Ahmedabad')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition">Ahmedabad</button>
+            <button type="button" onclick="quickFilterCity('Kolkata')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200 transition">Kolkata</button>
+            <button type="button" onclick="quickFilterCity('')" class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition">Clear Location</button>
+          </div>
+        </div>
+
+        <!-- Table View -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto scrollbar-thin">
+            <table class="w-full text-left text-xs text-slate-600">
+              <thead class="bg-slate-50 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th class="py-3 px-3 text-center w-12">
+                    <input type="checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)" title="Select/Deselect All On Page" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+                  </th>
+                  <th class="py-3.5 px-3">Deck Status</th>
+                  <th class="py-3.5 px-3">Influencer Handle</th>
+                  <th class="py-3.5 px-3">Rating</th>
+                  <th class="py-3.5 px-3">Followers &amp; Tier</th>
+                  <th class="py-3.5 px-3">Niche / Category</th>
+                  <th class="py-3.5 px-3 bg-red-50/20 text-red-900 border-x border-red-100">
+                    <i class="fa-solid fa-location-dot text-red-500 mr-1"></i> Location
+                  </th>
+                  <th class="py-3.5 px-3 bg-amber-50/50 text-amber-900 border-r border-amber-100">
+                    <div class="flex items-center gap-1">
+                      <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                      <span>Excel Rate / Commercials</span>
+                    </div>
+                  </th>
+                  <th class="py-3.5 px-3">Contact &amp; Profile</th>
+                  <th class="py-3.5 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="creatorTableBody" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Bar -->
+          <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+            <span id="pageSummary">Showing 0 creators</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="changePage(-1)" id="btnPrev" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 font-semibold transition">
+                <i class="fa-solid fa-chevron-left mr-1"></i> Prev
+              </button>
+              <span class="px-2 font-bold text-slate-800" id="currentPageNum">1</span>
+              <button type="button" onclick="changePage(1)" id="btnNext" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 disabled:opacity-40 font-semibold transition">
+                Next <i class="fa-solid fa-chevron-right ml-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= VIEW 2: REGION HUBS ================= -->
+      <div id="viewRegions" class="hidden space-y-6">
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="p-3 bg-indigo-100 text-indigo-700 rounded-2xl">
+              <i class="fa-solid fa-city text-2xl"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-black text-slate-900">Region-Specific Creator Hubs</h2>
+              <p class="text-xs text-slate-500">Target influencers geographically across major Indian markets</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500 font-semibold">Active Territory:</span>
+            <span id="activeRegionBadge" class="bg-indigo-600 text-white font-bold text-xs px-3 py-1 rounded-xl shadow-sm">All Territories</span>
+            <button type="button" onclick="resetRegionSelection()" class="text-xs text-slate-500 hover:text-slate-800 px-2 py-1 font-semibold underline">Reset</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5" id="regionPillsGrid"></div>
+
+        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+            <div>
+              <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-location-dot text-indigo-600"></i>
+                <span id="selectedRegionHeaderTitle">Creators in Selected Region</span>
+              </h3>
+              <p class="text-xs text-slate-400" id="selectedRegionSubCount">Showing 0 creators in this territory</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="addAllRegionToDeck()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-plus-circle"></i> Add Territory Creators to Deck
+              </button>
+              <button type="button" onclick="syncRegionWithMainTable()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-xl border border-slate-200 transition">
+                View in Main Table &rarr;
+              </button>
+            </div>
+          </div>
+          <div id="regionCreatorsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+      </div>
+
+      <!-- ================= VIEW 3: AI BRIEF RECOMMENDER ================= -->
+      <div id="viewSuggest" class="hidden space-y-6">
+        <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 shadow-xl border border-indigo-800/40 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-3">
+              <div class="p-2.5 bg-indigo-600 text-white rounded-2xl shadow-lg">
+                <i class="fa-solid fa-wand-magic-sparkles text-xl text-amber-300"></i>
+              </div>
+              <div>
+                <h2 class="text-base font-black text-white">AI Campaign Brief Matcher &amp; Creator Recommender</h2>
+                <p class="text-xs text-slate-300">Input your client deliverables to automatically identify the most accurate creators</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 text-xs">
+              <span class="text-slate-400">Prefill from Project:</span>
+              <select id="suggestBrandSelect" onchange="prefillSuggestFromBrand()" class="bg-slate-800 text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-700 text-indigo-200 focus:outline-none">
+                <option value="">-- Select Saved Project --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-bold text-indigo-200 mb-1.5">Client Campaign Brief / Deliverables *</label>
+              <textarea id="aiBriefPrompt" rows="3" placeholder="e.g. Need luxury real estate creators in Bengaluru for 3BHK flat walkthrough reels and IG stories..." class="w-full bg-slate-800/80 border border-slate-700 text-white text-xs p-3 rounded-2xl placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-bold text-indigo-200 mb-1.5">Target Location</label>
+                <select id="aiBriefLocation" class="w-full bg-slate-800/80 border border-slate-700 text-white text-xs p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="">Pan India (Any Location)</option>
+                  <option value="Mumbai">Mumbai</option>
+                  <option value="Bengaluru">Bengaluru</option>
+                  <option value="Delhi NCR">Delhi NCR</option>
+                  <option value="Pune">Pune</option>
+                  <option value="Hyderabad">Hyderabad</option>
+                  <option value="Ahmedabad / Gujarat">Ahmedabad / Gujarat</option>
+                  <option value="Kolkata">Kolkata</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-indigo-200 mb-1.5">Primary Category / Niche</label>
+                <input id="aiBriefNiche" type="text" placeholder="e.g. Real Estate, Lifestyle, Finance" class="w-full bg-slate-800/80 border border-slate-700 text-white text-xs p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-bold text-amber-300 mb-1.5">
+                  <i class="fa-solid fa-indian-rupee-sign mr-1"></i> Per-Creator Budget Cap (Max ₹)
+                </label>
+                <input id="aiBriefBudget" type="number" placeholder="e.g. 50000" class="w-full bg-slate-800/80 border border-amber-500/50 text-amber-300 font-bold text-xs p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-indigo-200 mb-1.5">Preferred Tier</label>
+                <select id="aiBriefTier" class="w-full bg-slate-800/80 border border-slate-700 text-white text-xs p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                  <option value="">Any Tier</option>
+                  <option value="Nano">Nano (1K-10K)</option>
+                  <option value="Micro">Micro (10K-100K)</option>
+                  <option value="Mid Tier">Mid Tier (100K-500K)</option>
+                  <option value="Macro">Macro (500K-1M)</option>
+                  <option value="Mega">Mega (1M+)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <span class="text-xs text-indigo-300 font-medium" id="aiMatcherStatusText">
+              Enter your campaign requirements above and run AI matching.
+            </span>
+            <div class="flex gap-2">
+              <button type="button" onclick="resetRecommenderForm()" class="text-xs text-slate-400 hover:text-white px-3 py-1.5 transition">Reset</button>
+              <button type="button" onclick="runAIRecommender()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-5 py-2.5 rounded-xl shadow-lg flex items-center gap-2 transition">
+                <i class="fa-solid fa-magnifying-glass-chart"></i> Analyze &amp; Suggest Creators
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="suggestedResultsArea" class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+            <div>
+              <h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
+                <span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-lg text-xs font-bold" id="suggestMatchCount">0</span>
+                Suggested Creators Ranked by Brief Relevance
+              </h3>
+              <p class="text-xs text-slate-500">Sorted by semantic keyword matching, geographical alignment, and commercial fit</p>
+            </div>
+            <button type="button" onclick="addAllSuggestedToDeck()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl shadow flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-plus-circle"></i> Add All Recommended to Deck
+            </button>
+          </div>
+          <div id="suggestedCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="col-span-3 text-center py-16 bg-white rounded-3xl border border-slate-200 text-slate-400">
+              <i class="fa-solid fa-sparkles text-3xl mb-2 text-indigo-300"></i>
+              <p class="text-sm font-bold text-slate-600">No suggestions calculated yet</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= VIEW 4: BRANDS ================= -->
+      <div id="viewBrands" class="space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Projects &amp; Campaign Briefs</h2>
+            <p class="text-xs text-slate-500">Track client campaigns, team assignments, deliverables, and target budgets</p>
+          </div>
+          <button type="button" onclick="openAddBrandModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition flex items-center gap-2">
+            <i class="fa-solid fa-circle-plus"></i> Add New Project
+          </button>
+        </div>
+        <div class="flex justify-end"><button type="button" onclick="clearAllProjects()" class="text-xs font-bold text-red-600 border border-red-200 rounded-xl px-3 py-2 hover:bg-red-50"><i class="fa-solid fa-trash-can mr-1"></i> Delete All Projects</button></div>
+        <div id="brandsListGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+      </div>
+
+      <!-- ================= VIEW 5: TEAM ================= -->
+      <div id="viewTeam" class="hidden space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">Team Roster &amp; Credentials</h2>
+            <p class="text-xs text-slate-500">Add new users or remove team credentials from the workspace</p>
+          </div>
+          <button type="button" onclick="openAddMemberModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow transition flex items-center gap-2">
+            <i class="fa-solid fa-user-plus"></i> + Add Member
+          </button>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <table class="w-full text-left text-xs text-slate-600">
+            <thead class="bg-slate-50 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200">
+              <tr>
+                <th class="py-3.5 px-4">Member Name / ID</th>
+                <th class="py-3.5 px-3">Role</th>
+                <th class="py-3.5 px-3">Assigned Projects</th>
+                <th class="py-3.5 px-3">Creators In Pipeline</th>
+                <th class="py-3.5 px-3">Work Email</th>
+                <th class="py-3.5 px-3 text-right">Delete / Action</th>
+              </tr>
+            </thead>
+            <tbody id="teamTableBody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ================= FLOATING DECK BAR ================= -->
+  <div id="selectionBar" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl border border-indigo-500/50 flex items-center gap-4 text-xs">
+    <div class="flex items-center gap-2">
+      <span class="bg-indigo-600 text-white font-black px-2.5 py-0.5 rounded-full text-xs" id="selectedCountBadge">0</span>
+      <span class="font-bold text-slate-200">In Deck</span>
+    </div>
+    <div class="h-4 w-px bg-slate-700"></div>
+    <div class="flex items-center gap-1.5">
+      <span class="text-slate-400">Total Deck Cost:</span>
+      <span class="text-emerald-400 font-mono font-bold text-sm" id="floatingDeckOutlay">₹0</span>
+    </div>
+    <div class="h-4 w-px bg-slate-700"></div>
+    <button type="button" onclick="openDeckModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 transition">
+      <i class="fa-solid fa-file-powerpoint text-amber-300"></i> Open Deck &amp; Export PDF
+    </button>
+    <button type="button" onclick="clearSelection()" class="text-slate-400 hover:text-white p-1 transition" title="Clear Deck">
+      <i class="fa-solid fa-xmark text-sm"></i>
+    </button>
+  </div>
+
+  <!-- ================= MODAL: PITCH DECK PREVIEW & PDF EXPORTER ================= -->
+  <div id="deckModal" class="fixed inset-0 bg-slate-950/80 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto border border-slate-100">
+      
+      <div class="flex justify-between items-start border-b pb-3 no-print">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="bg-indigo-600 text-white p-2 rounded-xl text-sm">
+              <i class="fa-solid fa-file-powerpoint"></i>
+            </span>
+            <div>
+              <h3 class="text-base font-black text-slate-900">Campaign Pitch Deck &amp; PDF Presentation</h3>
+              <p class="text-xs text-slate-500">Edit individual creator costs and download a clean, non-overlapping PDF</p>
+            </div>
+          </div>
+        </div>
+        <button type="button" onclick="closeDeckModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold">&times;</button>
+      </div>
+
+      <div id="deckPrintableArea" class="pdf-page-container space-y-4">
+        <div class="pdf-header-block bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-2xl space-y-4">
+          <div class="flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+              <div class="bg-black p-2 rounded-xl border border-slate-800">
+                <span class="text-lg font-black text-emerald-500 tracking-tight font-sans">brikkin</span>
+              </div>
+              <div>
+                <label class="text-[10px] uppercase font-bold text-indigo-300 block">Proposal</label>
+                <input type="text" onchange="syncCloud('deck_title',this.value)" id="deckCampaignTitle" value="Influencer Marketing Campaign Proposal" class="text-base font-black bg-transparent border-b border-indigo-400/40 text-white focus:outline-none w-full" />
+              </div>
+            </div>
+            <div>
+              <label class="text-[10px] uppercase font-bold text-indigo-300 block mb-0.5">Client / Project</label>
+              <input type="text" onchange="syncCloud('deck_client',this.value)" id="deckClientName" placeholder="e.g. Godrej Properties" class="text-xs font-bold bg-slate-800/80 border border-slate-700 text-indigo-200 rounded-lg px-2.5 py-1.5 focus:outline-none" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-800 text-xs">
+            <div class="bg-slate-800/70 p-2.5 rounded-xl">
+              <span class="text-slate-400 text-[10px] block">Selected Creators:</span>
+              <span class="font-bold text-white text-sm" id="deckModalCount">0</span>
+            </div>
+            <div class="bg-slate-800/70 p-2.5 rounded-xl">
+              <span class="text-slate-400 text-[10px] block">Total Estimated Cost:</span>
+              <span class="font-bold text-emerald-400 font-mono text-sm" id="deckModalTotalBudget">₹0</span>
+            </div>
+            <div class="bg-slate-800/70 p-2.5 rounded-xl">
+              <span class="text-slate-400 text-[10px] block">Avg Cost / Creator:</span>
+              <span class="font-bold text-amber-300 font-mono text-sm" id="deckModalAvgRate">₹0</span>
+            </div>
+            <div class="bg-slate-800/70 p-2.5 rounded-xl">
+              <span class="text-slate-400 text-[10px] block">Total Reach Potential:</span>
+              <span class="font-bold text-indigo-300 text-sm" id="deckModalReach">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="deckContent" class="space-y-3"></div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t no-print">
+        <div class="flex items-center gap-2">
+          <button type="button" id="btnDownloadPDF" onclick="downloadDeckAsPDF()" class="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold shadow flex items-center gap-2 transition">
+            <i class="fa-solid fa-file-pdf"></i> Export as Clean PDF
+          </button>
+          <button type="button" onclick="openEmailModal()" class="px-3 py-2 border rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-envelope"></i> Email</button>
+          <button type="button" onclick="exportDeckAsCSV()" class="px-3 py-2 border rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
+            <i class="fa-solid fa-file-csv text-emerald-600"></i> Download CSV
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeDeckModal()" class="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50">Close</button>
+          <button type="button" onclick="copyDeckExecutiveSummary()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-copy"></i> Copy Proposal Text
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: Project -->
+  <div id="brandModal" class="fixed inset-0 bg-slate-950/70 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold text-slate-900" id="brandModalTitle">Add New Project</h3>
+        <button type="button" onclick="closeAddBrandModal()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+      </div>
+      <form id="brandForm" onsubmit="handleBrandSubmit(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="editingBrandId" value="" />
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Project / Project Name *</label>
+          <input required id="bName" type="text" placeholder="e.g. Godrej Properties, BoAt" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Assigned Team Member *</label>
+            <select required id="bAssignee" class="w-full p-2.5 border border-slate-300 rounded-xl bg-white"></select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Industry</label>
+            <input required id="bCategory" type="text" placeholder="e.g. Real Estate, Beauty" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Target Budget / Creator (₹)</label>
+            <input id="bBudget" type="text" placeholder="e.g. ₹50,000" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Location</label>
+            <input id="bLocation" type="text" placeholder="e.g. Mumbai, Bengaluru" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Campaign Brief Requirements *</label>
+          <textarea required id="bBrief" rows="3" placeholder="Deliverables and candidate requirements..." class="w-full p-2.5 border border-slate-300 rounded-xl"></textarea>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Status</label>
+          <select id="bStatus" class="w-full p-2.5 border border-slate-300 rounded-xl bg-white">
+            <option value="Active Sourcing">Active Sourcing</option>
+            <option value="Negotiation Stage">Negotiation Stage</option>
+            <option value="Shared with Client">Shared with Client</option>
+            <option value="Content Production">Content Production</option>
+            <option value="Live / Completed">Live / Completed</option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="button" onclick="closeAddBrandModal()" class="px-4 py-2 border rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow">Save Project</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Add Team Member -->
+  <div id="memberModal" class="fixed inset-0 bg-slate-950/70 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold text-slate-900">Add Team Member</h3>
+        <button type="button" onclick="closeAddMemberModal()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+      </div>
+      <form id="memberForm" onsubmit="handleMemberSubmit(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Full Name *</label>
+          <input required id="mName" type="text" placeholder="e.g. Yashika Patel" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">User ID *</label>
+          <input required id="mUserId" type="text" placeholder="e.g. yashika" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Role *</label>
+            <input required id="mRole" type="text" placeholder="e.g. Talent Lead" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Email</label>
+            <input id="mEmail" type="email" placeholder="yashika@insomniacs.in" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+          </div>
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Existing Firebase Auth UID (if account already exists)</label>
+          <input id="mExistingUid" type="text" placeholder="Copy UID from Authentication → Users" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Temporary password (only for a new account)</label>
+          <input id="mPassword" type="password" minlength="12" placeholder="At least 12 characters" class="w-full p-2.5 border border-slate-300 rounded-xl" />
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="button" onclick="closeAddMemberModal()" class="px-4 py-2 border rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow">Add Member</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Bulk Upload -->
+  <div id="bulkModal" class="fixed inset-0 bg-slate-950/70 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold text-slate-900">Bulk Upload Creators</h3>
+        <button type="button" onclick="closeBulkModal()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+      </div>
+      <div id="dropZone" onclick="document.getElementById('bulkFileInput').click()" class="border-2 border-dashed border-indigo-200 hover:border-indigo-400 bg-indigo-50/40 rounded-2xl p-8 text-center cursor-pointer transition">
+        <input type="file" id="bulkFileInput" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleBulkFileSelect(event)" />
+        <i class="fa-solid fa-cloud-arrow-up text-3xl text-indigo-500 mb-2"></i>
+        <h4 class="text-sm font-bold text-slate-800">Click or Drag &amp; Drop Excel / CSV</h4>
+      </div>
+      <div id="bulkPreview" class="hidden space-y-3">
+        <div class="flex items-center justify-between text-xs bg-slate-50 p-3 rounded-xl border">
+          <span class="font-bold text-slate-800" id="bulkFileName">File selected</span>
+          <span class="text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full" id="bulkRowCount">0 rows</span>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assign Tab:</label>
+          <select id="bulkAssignTab" class="w-full text-xs p-2.5 border rounded-xl bg-white"></select>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-3 border-t">
+        <button type="button" onclick="closeBulkModal()" class="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+        <button type="button" id="btnConfirmBulk" onclick="confirmBulkUpload()" disabled class="px-4 py-2 bg-indigo-600 disabled:opacity-40 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow">Import into Pool</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Single Creator -->
+  <div id="addCreatorModal" class="fixed inset-0 bg-slate-950/70 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="text-base font-bold text-slate-900" id="creatorModalTitle">Add Creator to Pipeline</h3>
+        <button type="button" onclick="closeAddCreatorModal()" class="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+      </div>
+      <form id="addCreatorForm" onsubmit="handleAddCreatorSubmit(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="editingCreatorId" value="" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Creator Name / Handle *</label>
+            <input required id="fHandle" type="text" placeholder="e.g. Radhika Verma" class="w-full p-2.5 border rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Instagram Link *</label>
+            <input required id="fLink" type="text" placeholder="https://instagram.com/..." class="w-full p-2.5 border rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Followers Count</label>
+            <input required id="fFollowers" type="text" placeholder="e.g. 85K" class="w-full p-2.5 border rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Tier</label>
+            <select id="fTier" class="w-full p-2.5 border rounded-xl bg-white">
+              <option value="Nano (1K-10K)">Nano (1K-10K)</option>
+              <option value="Micro (10K-100K)">Micro (10K-100K)</option>
+              <option value="Mid Tier (100K-500K)">Mid Tier (100K-500K)</option>
+              <option value="Macro (500K-1M)">Macro (500K-1M)</option>
+              <option value="Mega (1M+)">Mega (1M+)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Niche / Category *</label>
+            <input required id="fCategory" type="text" placeholder="e.g. Real Estate, Lifestyle" class="w-full p-2.5 border rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">City / Location *</label>
+            <input required id="fLocation" type="text" placeholder="e.g. Mumbai, Bengaluru" class="w-full p-2.5 border rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Quoted Commercials (₹)</label>
+            <input id="fCommercial" type="text" placeholder="e.g. ₹35,000 / 1 Reel" class="w-full p-2.5 border rounded-xl" />
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">Contact Phone / WhatsApp</label>
+            <input id="fContact" type="text" placeholder="e.g. 9820012345" class="w-full p-2.5 border rounded-xl" />
+          </div>
+          <div class="col-span-2">
+            <label class="block font-semibold text-slate-700 mb-1">Deliverables</label>
+            <input id="fDeliverables" type="text" placeholder="e.g. 1 Collab Reel + 2 Stories" class="w-full p-2.5 border rounded-xl" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="button" onclick="closeAddCreatorModal()" class="px-4 py-2 border rounded-xl font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow">Save Creator</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="emailModal" class="fixed inset-0 bg-slate-950/80 hidden p-4 z-[60] overflow-y-auto">
+    <form onsubmit="composeDashboardEmail(event)" class="bg-white rounded-3xl max-w-lg mx-auto mt-12 p-6 space-y-4 shadow-2xl">
+      <h3 class="font-bold text-slate-900">Email proposal</h3>
+      <label class="block text-xs font-semibold">From<input id="emailFrom" type="email" required class="block w-full p-2.5 border rounded-xl mt-1"></label>
+      <label class="block text-xs font-semibold">To<input id="emailTo" type="email" required class="block w-full p-2.5 border rounded-xl mt-1"></label>
+      <label class="block text-xs font-semibold">Subject<input id="emailSubject" required class="block w-full p-2.5 border rounded-xl mt-1"></label>
+      <label class="block text-xs font-semibold">Body<textarea id="emailBody" required rows="6" class="block w-full p-2.5 border rounded-xl mt-1"></textarea></label>
+      <p class="text-xs text-slate-500">Opens Gmail for the From account. Sign in to that account and verify the sender before sending. Download and attach the PDF in Gmail.</p>
+      <div class="flex gap-2"><button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold">Open Gmail draft</button><button type="button" onclick="document.getElementById('emailModal').classList.add('hidden')" class="px-4 py-2 border rounded-xl text-xs">Close</button></div>
+    </form>
+  </div>
+
+  <!-- JavaScript Logic & Multi-User Cloud Bridge -->
+  <script>
+    // Fail-safe storage fallback
+    const memoryStore = {};
+    const safeStorage = {
+      get(key, fallback = null) {
+        try {
+          const val = localStorage.getItem(key);
+          return val ? JSON.parse(val) : fallback;
+        } catch(e) {
+          return memoryStore[key] !== undefined ? memoryStore[key] : fallback;
+        }
+      },
+      set(key, val) {
+        try {
+          localStorage.setItem(key, JSON.stringify(val));
+        } catch(e) {
+          memoryStore[key] = val;
+        }
+      }
+    };
+
+    const INITIAL_ROSTER = [{"id": 1, "handle": "Aarushi Shah", "link": "https://www.instagram.com/aarushishah912", "followers": "83000", "tier": "Micro (10K-100K)", "location": "Ahmedabad / Gujarat", "category": "lifestyle", "commercial": "7000", "lastPayment": "7000", "deliverables": "1 Reel", "team_source": "Master sheet"}, {"id": 2, "handle": "Himadri Dave", "link": "https://www.instagram.com/himadri.dave/", "followers": "127000", "tier": "Mid Tier (100K-500K)", "location": "Ahmedabad / Gujarat", "category": "lifestyle", "commercial": "7000", "lastPayment": "7000", "deliverables": "1 Reel", "team_source": "Master sheet"}, {"id": 3, "handle": "Veena Malviya", "link": "https://www.instagram.com/malviyaveena/", "followers": "47900", "tier": "Micro (10K-100K)", "location": "Ahmedabad / Gujarat", "category": "lifestyle", "commercial": "7000", "lastPayment": "7000", "deliverables": "1 Reel", "team_source": "Master sheet"}, {"id": 4, "handle": "Tanisha Paras", "link": "https://www.instagram.com/tanishaparas/", "followers": "3.3K", "tier": "Nano (1K-10K)", "location": "Mumbai", "category": "lifestyle", "commercial": "8000", "lastPayment": "8000", "deliverables": "1 Reel + 1 Story", "team_source": "Master sheet"}, {"id": 5, "handle": "Ankita Singh", "link": "https://www.instagram.com/reel/DODgTeMCS5X/?igsh=MWZpM3BueDRhYTYwbA==", "followers": "437K", "tier": "Mid Tier (100K-500K)", "location": "Bengaluru", "category": "Finance & Education", "commercial": "180000", "lastPayment": "180000", "deliverables": "collab reel + reshare story", "team_source": "Master sheet"}, {"id": 6, "handle": "Anuradha", "link": "https://www.instagram.com/shepinklife", "followers": "49558", "tier": "Micro (10K-100K)", "location": "Ahmedabad / Gujarat", "category": "lifestyle", "commercial": "8000", "lastPayment": "8000", "deliverables": "1 Reel", "team_source": "Master sheet"}, {"id": 7, "handle": "Priyanka Arora", "link": "https://www.instagram.com/periperipriyankaa/", "followers": "459K", "tier": "Mid Tier (100K-500K)", "location": "Bengaluru", "category": "Fashion & Lifestyle", "commercial": "100000", "lastPayment": "100000", "deliverables": "reel - nego", "team_source": "Master sheet"}, {"id": 8, "handle": "Soumya Nayyar", "link": "https://www.instagram.com/soumya_nayyar_/", "followers": "11K", "tier": "Micro (10K-100K)", "location": "Mumbai", "category": "lifestyle", "commercial": "10000", "lastPayment": "10000", "deliverables": "1 Reel", "team_source": "Master sheet"}, {"id": 9, "handle": "cargirlsindia", "link": "https://www.instagram.com/reel/DUdcQcHDBEO/", "followers": "796K", "tier": "Macro (500K-1M)", "location": "Bengaluru", "category": "Automobile", "commercial": "400000", "lastPayment": "400000", "deliverables": "Reel + Static", "team_source": "Master sheet"}, {"id": 10, "handle": "Deepak Gadhigappa", "link": "https://www.instagram.com/deepu.vlogs/", "followers": "262K", "tier": "Mid Tier (100K-500K)", "location": "Bengaluru", "category": "Automobile", "commercial": "1,30,000", "lastPayment": "1,30,000", "deliverables": "Reel", "team_source": "Master sheet"}, {"id": 11, "handle": "GM Pavan", "link": "https://www.instagram.com/pavangamemaster/", "followers": "93.4K", "tier": "Micro (10K-100K)", "location": "Bengaluru", "category": "Automobile", "commercial": "9000", "lastPayment": "9000", "deliverables": "Reel", "team_source": "Master sheet"}, {"id": 12, "handle": "Krishna Chaitanya", "link": "https://www.instagram.com/reel/DSAGUf8klwK/", "followers": "267K", "tier": "Mid Tier (100K-500K)", "location": "Hyderabad", "category": "Finance & Education", "commercial": "35000/25000", "lastPayment": "35000/25000", "deliverables": "site visit/studio setup", "team_source": "Master sheet"}, {"id": 13, "handle": "Charmy Turakhia", "link": "https://www.instagram.com/reel/DQmVPIgDOZw/", "followers": "86.9K", "tier": "Micro (10K-100K)", "location": "Pune", "category": "Real estate & Lifestyle", "commercial": "50000/100000", "lastPayment": "50000/100000", "deliverables": "Drone shoot & walkthrough reel", "team_source": "Master sheet"}, {"id": 14, "handle": "Sid Singh", "link": "https://www.instagram.com/siddhee_singh", "followers": "30531", "tier": "Micro (10K-100K)", "location": "Ahmedabad / Gujarat", "category": "lifestyle", "commercial": "8000", "lastPayment": "8000", "deliverables": "1 Reel", "team_source": "Master sheet"}, {"id": 15, "handle": "Rupali Raghuvanshi", "link": "https://www.instagram.com/rupaliraghuvanshii/", "followers": "26K", "tier": "Micro (10K-100K)", "location": "Mumbai", "category": "lifestyle", "commercial": "10000", "lastPayment": "10000", "deliverables": "1 Reel", "team_source": "Master sheet"}, {"id": 16, "handle": "Harpreet Singh Ghulati", "link": "https://www.instagram.com/reel/DO3XAjwCoKI/", "followers": "164K", "tier": "Mid Tier (100K-500K)", "location": "Gurgaon", "category": "Real estate", "commercial": "500000", "lastPayment": "500000", "deliverables": "Walkthrough Reel", "team_source": "Master sheet"}, {"id": 17, "handle": "Bhoomi churla", "link": "https://www.instagram.com/just_bhoomi_things/", "followers": "91K", "tier": "Micro (10K-100K)", "location": "Mumbai", "category": "lifestyle", "commercial": "12000", "lastPayment": "12000", "deliverables": "Reel", "team_source": "Master sheet"}, {"id": 18, "handle": "Apoorva Sonawne", "link": "https://www.instagram.com/_sonawane.apoorva_/", "followers": "7K", "tier": "Nano (1K-10K)", "location": "Mumbai", "category": "lifestyle", "commercial": "15000", "lastPayment": "15000", "deliverables": "Reel", "team_source": "Master sheet"}, {"id": 19, "handle": "Harpreet Jatail", "link": "https://www.instagram.com/harpreetjatail/", "followers": "13.5K", "tier": "Micro (10K-100K)", "location": "Mumbai", "category": "lifestyle", "commercial": "15000", "lastPayment": "15000", "deliverables": "Reel", "team_source": "Master sheet"}, {"id": 20, "handle": "onthego.reviews", "link": "https://www.instagram.com/onthego.reviews/", "followers": "124K", "tier": "Mid Tier (100K-500K)", "location": "Bengaluru", "category": "Automobile", "commercial": "25000", "lastPayment": "25000", "deliverables": "Reel review", "team_source": "Master sheet"}, {"id": 21, "handle": "pavan", "link": "https://www.instagram.com/reel/DM-h5COSZkW/", "followers": "29.5K", "tier": "Micro (10K-100K)", "location": "Pune", "category": "Real estate", "commercial": "35,000 / 40,000", "lastPayment": "35,000 / 40,000", "deliverables": "Content creation/usage rights 4months", "team_source": "Master sheet"}, {"id": 22, "handle": "Kashish Akhon", "link": "https://www.instagram.com/kasssshish/", "followers": "15K", "tier": "Micro (10K-100K)", "location": "Mumbai", "category": "lifestyle", "commercial": "15000", "lastPayment": "15000", "deliverables": "Reel", "team_source": "Master sheet"}];
+
+    const DEFAULT_TEAM = [];
+
+    const DEFAULT_BRANDS = [];
+
+    const TERRITORY_HUBS = [
+      { id: "mumbai", name: "Mumbai & MMR", tag: "West Hub", keywords: ["mumbai", "navi mumbai", "thane", "bombay", "bandra", "andheri"], icon: "fa-building-columns", color: "indigo" },
+      { id: "bengaluru", name: "Bengaluru (Karnataka)", tag: "South Hub", keywords: ["bengaluru", "bangalore", "karnataka", "whitefield", "koramangala"], icon: "fa-microchip", color: "emerald" },
+      { id: "delhi", name: "Delhi NCR", tag: "North Hub", keywords: ["delhi", "gurgaon", "gurugram", "noida", "ncr", "faridabad"], icon: "fa-monument", color: "red" },
+      { id: "pune", name: "Pune", tag: "West Hub", keywords: ["pune", "hinjewadi", "kothrud"], icon: "fa-landmark", color: "amber" },
+      { id: "hyderabad", name: "Hyderabad (Telangana)", tag: "South Hub", keywords: ["hyderabad", "telangana", "secunderabad"], icon: "fa-gem", color: "cyan" },
+      { id: "gujarat", name: "Ahmedabad & Gujarat", tag: "West Hub", keywords: ["ahmedabad", "gujarat", "surat", "vadodara"], icon: "fa-sun", color: "orange" },
+      { id: "kolkata", name: "Kolkata & East", tag: "East Hub", keywords: ["kolkata", "bengal", "howrah"], icon: "fa-bridge", color: "purple" },
+      { id: "other", name: "Other Indian Cities", tag: "Pan India", keywords: ["all india", "jaipur", "chennai", "goa", "lucknow", "chandigarh"], icon: "fa-earth-asia", color: "slate" }
+    ];
+
+    function parseNumericRate(comm) {
+      if (!comm) return null;
+      let s = String(comm).toLowerCase().replace(/,/g, '').trim();
+      if (s === 'nan' || s.includes('quote') || s === '') return null;
+      const lakhMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:lakhs?|lac|l\b)/);
+      if (lakhMatch) return Math.round(parseFloat(lakhMatch[1]) * 100000);
+      const kMatch = s.match(/(\d+(?:\.\d+)?)\s*k\b/);
+      if (kMatch) return Math.round(parseFloat(kMatch[1]) * 1000);
+      const cleanNums = s.replace(/[^0-9]/g, ' ').split(/\s+/);
+      for (let n of cleanNums) {
+        if (n && parseInt(n) >= 500) return parseInt(n);
+      }
+      return null;
+    }
+
+    function parseFollowerCount(str) {
+      if (!str) return 0;
+      let s = String(str).toLowerCase().replace(/,/g, '').trim();
+      let m = s.match(/(\d+(?:\.\d+)?)\s*m/);
+      if (m) return parseFloat(m[1]) * 1000000;
+      let k = s.match(/(\d+(?:\.\d+)?)\s*k/);
+      if (k) return parseFloat(k[1]) * 1000;
+      let num = parseFloat(s.replace(/[^0-9.]/g, ''));
+      return isNaN(num) ? 0 : num;
+    }
+
+    let teamMembers = [];
+    let brandCampaigns = [];
+    let customCreators = [];
+    let deletedCreatorIds = new Set();
+    let creatorRatings = {};
+    let currentAuthUser = null;
+    let selectedCreatorIds = new Set();
+    let deckCustomCosts = {};
+    let aiSuggestedList = [];
+    let activeRegionHub = TERRITORY_HUBS[0];
+
+    function refreshAllCreators() {
+      const activeInitial = INITIAL_ROSTER.filter(c => !deletedCreatorIds.has(String(c.id)));
+      const activeCustom = customCreators.filter(c => !deletedCreatorIds.has(String(c.id)));
+
+      allCreators = [...activeCustom, ...activeInitial].map(c => ({
+        ...c,
+        contact: canContact() ? (contactNumbers[String(c.id)] || '') : '',
+        numericRate: parseNumericRate(c.commercial),
+        rating: creatorRatings[String(c.id)] || 0,
+        numericFollowers: parseFollowerCount(c.followers)
+      }));
+    }
+    let allCreators = [];
+    refreshAllCreators();
+
+    let filteredList = [...allCreators];
+    let currentPage = 1;
+    const PAGE_SIZE = 50;
+    let parsedBulkData = [];
+
+    // Auth and realtime sync are backed by this Firebase project.
+    const firebaseConfig={
+      apiKey:'AIzaSyAUaSvoGffUnVOx3ezqMBQ3JjOZrpwxoko',
+      authDomain:'brikkin-dashboard.firebaseapp.com',
+      databaseURL:'https://brikkin-dashboard-default-rtdb.asia-southeast1.firebasedatabase.app',
+      projectId:'brikkin-dashboard',
+      storageBucket:'brikkin-dashboard.firebasestorage.app',
+      messagingSenderId:'508273587458',
+      appId:'1:508273587458:web:7fb07c96be0d8fa948fe1b',
+      measurementId:'G-MZKZ5TBJDJ'
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth=firebase.auth();
+    const database=firebase.database();
+    const stateRef=database.ref('workspace/public');
+    let privateStateRef=null;
+    let teamStateListener=null;
+    const contactsRef=database.ref('creator_contacts');
+    let contactNumbers={};
+    let contactListener=null;
+    let memberListener=null;
+    function canContact() { return currentAuthUser && (currentAuthUser.role==='admin' || currentAuthUser.canContact===true); }
+    function cleanPublicCreators(items) { return (items || []).filter(Boolean).map(({contact,...rest})=>rest); }
+    function cleanTeam(items) {return (items || []).filter(Boolean).map(({password,...rest})=>rest);}
+    async function saveContact(id,phone) {
+      if(!phone || !currentAuthUser || currentAuthUser.role!=='admin') return;
+      await contactsRef.child(String(id)).set(String(phone));
+    }
+    async function importContacts(input) {
+      if(currentAuthUser.role!=='admin') return;
+      const file=input.files[0];if(!file) return;
+      try {
+        const items=JSON.parse(await file.text());
+        if(!items || Array.isArray(items) || typeof items!=='object') throw new Error('Invalid contact file');
+        if(!confirm(`Import ${Object.keys(items).length} private creator numbers?`)) return;
+        await contactsRef.update(items);
+        alert('Private contacts imported. Remove admin-contacts.json from any public hosting folder.');
+      } catch(err) {alert('Contact import failed: '+err.message);} finally {input.value='';}
+    }
+    function listenContacts() {
+      if(contactListener) contactsRef.off('value',contactListener);
+      contactNumbers={};
+      if(!canContact()) {refreshAllCreators();applyFilters();return;}
+      contactListener=contactsRef.on('value',snap=>{
+        contactNumbers=snap.val() || {};
+        refreshAllCreators();applyFilters();renderRegionHubs();
+      },error=>console.warn('Contacts unavailable',error));
+    }
+    async function setContactAccess(uid,enabled) {
+      if(!currentAuthUser || currentAuthUser.role!=='admin') return;
+      try {await database.ref('members/'+uid+'/canContact').set(enabled);renderTeamTable();}
+      catch(err) {alert('Could not update access: '+err.message);}
+    }
+
+    let stateListener=null;
+    let pendingWrites=0;
+    async function authorize(user) {
+      const admin=user.email && user.email.toLowerCase()==='aarsh.sharma@insomniacs.in';
+      const membership=admin ? null : (await database.ref('members/'+user.uid).once('value')).val();
+      if (!admin && (!membership || membership.email?.toLowerCase()!==user.email?.toLowerCase())) throw new Error(`This account is not authorized. Ask the admin to add UID ${user.uid} with email ${user.email}.`);
+      currentAuthUser={id:user.uid,email:user.email,name:admin?'Aarsh Sharma':membership.name,role:admin?'admin':'member',canContact:admin || membership.canContact===true,userId:user.email};
+      if(memberListener) database.ref('members/'+user.uid).off('value',memberListener);
+      if(!admin) memberListener=database.ref('members/'+user.uid).on('value',snap=>{
+        if(!snap.exists()) {logoutUser();return;}
+        currentAuthUser.canContact=snap.val().canContact===true;listenContacts();
+      });
+      privateStateRef=database.ref('user_workspaces/'+user.uid);
+      renderSharedValues({});
+      listenContacts();
+    }
+    function renderSharedValues(values) {
+      customCreators=cleanPublicCreators(values.custom_creators || []);
+      deletedCreatorIds=new Set(values.deleted_creator_ids || []);
+      creatorRatings=values.creator_ratings || {};
+      brandCampaigns=values.brand_campaigns || [];
+      if(values.team_members) teamMembers=cleanTeam(values.team_members);
+      selectedCreatorIds=new Set(values.deck_selected_ids || []);
+      deckCustomCosts=values.deck_custom_costs || {};
+      refreshAllCreators();refreshTeamSelects();applyFilters();renderBrandsList();renderTeamTable();renderRegionHubs();updateDeckFloatingBar();
+      const badge=document.getElementById('syncStatusBadge');
+      if(badge) badge.textContent='Private workspace synced';
+      document.getElementById('deckCampaignTitle').value=values.deck_title || 'Influencer Marketing Campaign Proposal';
+      document.getElementById('deckClientName').value=values.deck_client || '';
+      if(!document.getElementById('deckModal').classList.contains('hidden') && selectedCreatorIds.size) openDeckModal();
+    }
+    async function migrateLegacyState() {
+      if(!currentAuthUser || currentAuthUser.role!=='admin') return;
+      const existing=await stateRef.once('value');
+      const old=(await database.ref('workspace/state').once('value')).val();
+      if(!old) return;
+      const newContacts={};
+      (old.custom_creators || []).forEach(c=>{if(c.contact)newContacts[String(c.id)]=String(c.contact);});
+      if(Object.keys(newContacts).length) await contactsRef.update(newContacts);
+      const safe={...old,custom_creators:cleanPublicCreators(old.custom_creators || []),team_members:cleanTeam(old.team_members || [])};
+      const existingKeys=existing.val() || {};
+      await Promise.all(Object.entries(safe).filter(([key])=>['custom_creators','deleted_creator_ids','creator_ratings','brand_campaigns','team_members','deck_selected_ids','deck_custom_costs'].includes(key) && !Object.prototype.hasOwnProperty.call(existingKeys,key)).map(([key,value])=>stateRef.child(key).set(value)));
+    }
+    function listenSharedState() {
+      if(stateListener) privateStateRef.off('value',stateListener);
+      if(teamStateListener) stateRef.child('team_members').off('value',teamStateListener);
+      teamStateListener=stateRef.child('team_members').on('value',snap=>{
+        teamMembers=cleanTeam(snap.val() || []);
+        refreshTeamSelects();renderTeamTable();
+      });
+      const badge=document.getElementById('syncStatusBadge');
+      if(badge) badge.textContent='Connecting to private workspace…';
+      const uid=currentAuthUser.id;
+      stateListener=privateStateRef.on('value',snapshot=>{
+        if(!currentAuthUser || currentAuthUser.id!==uid || pendingWrites) return;
+        renderSharedValues(snapshot.val() || {});
+      },error=>{
+        if(badge) badge.textContent='Private sync failed';
+        alert('Private workspace unavailable. Apply the supplied Firebase rules: '+error.message);
+      });
+    }
+    function syncCloud(key,value) {
+      if(!currentAuthUser || !privateStateRef) return Promise.reject(new Error('Sign in first.'));
+      const ref=key==='team_members' ? stateRef : privateStateRef;
+      const uid=currentAuthUser.id;
+      pendingWrites++;
+      return ref.child(key).set(key==='custom_creators' ? cleanPublicCreators(value) : key==='team_members' ? cleanTeam(value) : value)
+        .catch(err=>{alert(`Could not save ${key}: ${err.message}`);throw err;})
+        .finally(()=>{
+          pendingWrites--;
+          if(!pendingWrites && currentAuthUser?.id===uid) privateStateRef.once('value')
+            .then(snapshot=>{if(currentAuthUser?.id===uid) renderSharedValues(snapshot.val() || {});}).catch(console.warn);
+        });
+    }
+    async function shareWorkspace() {
+      const email=prompt('Share a snapshot of your work with which colleague? Enter their email.');
+      if(!email) return;
+      const target=teamMembers.find(m=>(m.email || m.userId || '').toLowerCase()===email.trim().toLowerCase());
+      if(!target || target.id===currentAuthUser.id) return alert('Choose another registered team member.');
+      if(!confirm('Share your current projects, custom creators and selected deck with '+email+'?')) return;
+      try {
+        const snapshot={custom_creators:cleanPublicCreators(customCreators),deleted_creator_ids:Array.from(deletedCreatorIds),creator_ratings:creatorRatings,
+          brand_campaigns:brandCampaigns,deck_selected_ids:Array.from(selectedCreatorIds),deck_custom_costs:deckCustomCosts,
+          deck_title:document.getElementById('deckCampaignTitle').value,deck_client:document.getElementById('deckClientName').value};
+        await database.ref('workspace_shares/'+target.id+'/'+currentAuthUser.id).set({from:currentAuthUser.email,at:Date.now(),snapshot});
+        alert('Snapshot shared. Your later changes stay private until you share again.');
+      } catch(err) {alert('Sharing failed: '+err.message);}
+    }
+    async function openSharedWorkspace() {
+      try {
+        const items=(await database.ref('workspace_shares/'+currentAuthUser.id).once('value')).val() || {};
+        const list=Object.values(items);
+        if(!list.length) return alert('No colleague has shared work with you yet.');
+        const choice=prompt(list.map((x,i)=>`${i+1}. ${x.from} — ${new Date(x.at).toLocaleString()}`).join('\n')+'\nEnter the number to import:');
+        if(choice===null) return;
+        const item=list[Number(choice)-1];if(!item) return alert('Invalid selection.');
+        if(!confirm('Replace your current workspace with this shared snapshot?')) return;
+        await privateStateRef.set(item.snapshot);
+      } catch(err) {alert('Could not open shared work: '+err.message);}
+    }
+
+    function syncProjects() {syncCloud('brand_campaigns',brandCampaigns);}
+    function saveSelectedDeck() {
+      syncCloud('deck_selected_ids',Array.from(selectedCreatorIds));
+      syncCloud('deck_custom_costs',deckCustomCosts);
+      syncCloud('deck_title',document.getElementById('deckCampaignTitle').value);
+      syncCloud('deck_client',document.getElementById('deckClientName').value);
+      updateDeckFloatingBar();
+    }
+
+    // ================= BULLETPROOF LOGIN & AUTH HANDLERS =================
+    function setAuthMode(mode) {
+      const tabLogin = document.getElementById("authTabLogin");
+      const tabReg = document.getElementById("authTabRegister");
+      const loginForm = document.getElementById("loginForm");
+      const regForm = document.getElementById("registerForm");
+      document.getElementById("loginError").classList.add("hidden");
+      document.getElementById("registerError").classList.add("hidden");
+
+      if (mode === 'login') {
+        tabLogin.className = "flex-1 py-2 rounded-lg transition bg-white text-indigo-700 shadow-sm";
+        tabReg.className = "flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-900";
+        loginForm.classList.remove("hidden");
+        regForm.classList.add("hidden");
+      } else {
+        tabReg.className = "flex-1 py-2 rounded-lg transition bg-white text-indigo-700 shadow-sm";
+        tabLogin.className = "flex-1 py-2 rounded-lg transition text-slate-500 hover:text-slate-900";
+        regForm.classList.remove("hidden");
+        loginForm.classList.add("hidden");
+      }
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const errorBox=document.getElementById('loginError');
+      try {
+        const credential=await auth.signInWithEmailAndPassword(document.getElementById('loginId').value.trim(),document.getElementById('loginPassword').value);
+        await authorize(credential.user);showApp();listenSharedState();
+        if(currentAuthUser.role==='admin') migrateLegacyState().catch(err=>alert('Legacy data import needs attention: '+err.message));
+      } catch(err) {errorBox.textContent=err.message;errorBox.classList.remove('hidden');}
+    }
+    function handleRegisterSubmit(e) {
+      e.preventDefault();
+      alert('Ask an administrator to add your account. You can then sign in without an email confirmation step.');
+    }
+    async function logoutUser() {
+      if(stateListener && privateStateRef) privateStateRef.off('value',stateListener);stateListener=null;
+      if(teamStateListener) stateRef.child('team_members').off('value',teamStateListener);teamStateListener=null;
+      if(contactListener) contactsRef.off('value',contactListener);contactListener=null;
+      if(memberListener && auth.currentUser) database.ref('members/'+auth.currentUser.uid).off('value',memberListener);memberListener=null;
+      database.ref('members').off('value');contactNumbers={};
+      await auth.signOut();currentAuthUser=null;privateStateRef=null;teamMembers=[];renderSharedValues({});closeDeckModal();
+      document.getElementById('appContainer').classList.add('hidden');
+      document.getElementById('authSection').classList.remove('hidden');setAuthMode('login');
+    }
+
+    function showApp() {
+      document.getElementById("authSection").classList.add("hidden");
+      document.getElementById("appContainer").classList.remove("hidden");
+      document.getElementById("currentUserName").innerText = currentAuthUser.name;
+      const roleLabel=document.getElementById("currentUserRole");
+      if(roleLabel) roleLabel.innerText = currentAuthUser.role || currentAuthUser.userId;
+      document.getElementById("userAvatar").innerText = currentAuthUser.name.charAt(0).toUpperCase();
+      document.querySelectorAll('[onclick="openAddMemberModal()"]').forEach(el=>el.hidden=currentAuthUser.role!=='admin');
+      document.getElementById('contact-import-control').hidden=currentAuthUser.role!=='admin';
+      const contactField=document.getElementById('fContact');
+      if(contactField) contactField.closest('div').hidden=currentAuthUser.role!=='admin';
+      if(currentAuthUser.role==='admin') listenMemberPermissions();
+
+      refreshAllCreators();
+      applyFilters();
+      renderBrandsList();
+      renderTeamTable();
+      renderRegionHubs();
+      updateDeckFloatingBar();
+    }
+
+    function refreshTeamSelects() {
+      const brandAssigneeSel = document.getElementById("bAssignee");
+      const bulkTabSel = document.getElementById("bulkAssignTab");
+      const suggestBrandSelect = document.getElementById("suggestBrandSelect");
+
+      brandAssigneeSel.innerHTML = "";
+      bulkTabSel.innerHTML = "";
+      suggestBrandSelect.innerHTML = '<option value="">-- Select Saved Project --</option>';
+
+      teamMembers.forEach(m => {
+        brandAssigneeSel.add(new Option(m.name, m.name));
+        bulkTabSel.add(new Option(`${m.name}'s Sheet`, m.name));
+      });
+      bulkTabSel.add(new Option("Master Sheet", "Master sheet"));
+
+      brandCampaigns.forEach(b => {
+        suggestBrandSelect.add(new Option(`${b.name} (${b.category})`, b.id));
+      });
+
+      document.getElementById("navTeamCount").innerText = teamMembers.length;
+      document.getElementById("navBrandCount").innerText = brandCampaigns.length;
+      document.getElementById("navCreatorCount").innerText = allCreators.length.toLocaleString();
+    }
+
+    function switchView(viewName) {
+      document.getElementById("viewCreators").classList.add("hidden");
+      document.getElementById("viewRegions").classList.add("hidden");
+      document.getElementById("viewSuggest").classList.add("hidden");
+      document.getElementById("viewBrands").classList.add("hidden");
+      document.getElementById("viewTeam").classList.add("hidden");
+
+      const defClass = "px-2.5 py-1.5 rounded-lg font-bold text-slate-300 hover:text-white transition";
+      const activeClass = "px-2.5 py-1.5 rounded-lg font-bold transition bg-indigo-600 text-white";
+
+      document.getElementById("tabBtnCreators").className = defClass;
+      document.getElementById("tabBtnRegions").className = defClass;
+      document.getElementById("tabBtnSuggest").className = defClass;
+      document.getElementById("tabBtnBrands").className = defClass;
+      document.getElementById("tabBtnTeam").className = defClass;
+
+      if (viewName === 'creators') {
+        document.getElementById("viewCreators").classList.remove("hidden");
+        document.getElementById("tabBtnCreators").className = activeClass;
+        applyFilters();
+      } else if (viewName === 'regions') {
+        document.getElementById("viewRegions").classList.remove("hidden");
+        document.getElementById("tabBtnRegions").className = activeClass;
+        renderRegionHubs();
+      } else if (viewName === 'suggest') {
+        document.getElementById("viewSuggest").classList.remove("hidden");
+        document.getElementById("tabBtnSuggest").className = activeClass;
+      } else if (viewName === 'brands') {
+        document.getElementById("viewBrands").classList.remove("hidden");
+        document.getElementById("tabBtnBrands").className = activeClass;
+        renderBrandsList();
+      } else if (viewName === 'team') {
+        document.getElementById("viewTeam").classList.remove("hidden");
+        document.getElementById("tabBtnTeam").className = activeClass;
+        renderTeamTable();
+      }
+    }
+
+    function getEffectiveDeckCost(creator) {
+      const strId = String(creator.id);
+      if (deckCustomCosts[strId] !== undefined && deckCustomCosts[strId] !== null && deckCustomCosts[strId] !== "") {
+        return parseFloat(deckCustomCosts[strId]) || 0;
+      }
+      return creator.numericRate || 0;
+    }
+
+    function updateKPIs() {
+      document.getElementById("kpiTotal").innerText = allCreators.length.toLocaleString();
+      document.getElementById("kpiBrandCount").innerText = brandCampaigns.length;
+      document.getElementById("kpiBrandSub").innerText = `${brandCampaigns.length} campaigns tracked`;
+
+      const selected = allCreators.filter(c => selectedCreatorIds.has(String(c.id)));
+      let sum = 0;
+      let countWithCost = 0;
+      selected.forEach(c => {
+        const cost = getEffectiveDeckCost(c);
+        if (cost > 0) {
+          sum += cost;
+          countWithCost++;
+        }
+      });
+
+      const setText=(id,val)=>{const el=document.getElementById(id); if(el) el.innerText=val;};
+      setText("kpiSelectedCount", selected.length);
+      setText("kpiDeckBudget", `₹${sum.toLocaleString('en-IN')}`);
+      setText("kpiAvgRate", countWithCost > 0 ? `Avg: ₹${Math.round(sum / countWithCost).toLocaleString('en-IN')} / creator` : "No rate data");
+      setText("navDeckCount", selectedCreatorIds.size);
+      setText("clearBtnCount", selectedCreatorIds.size);
+      setText("navCreatorCount", allCreators.length.toLocaleString());
+    }
+
+    function quickFilterCity(cityName) {
+      document.getElementById("searchLocationInput").value = cityName;
+      document.getElementById("filterCity").value = cityName ? (document.querySelector(`#filterCity option[value*="${cityName}"]`) ? document.querySelector(`#filterCity option[value*="${cityName}"]`).value : "") : "";
+      applyFilters();
+    }
+
+    function syncLocationDropdown(val) {
+      document.getElementById("searchLocationInput").value = val;
+      applyFilters();
+    }
+
+    function getCreatorsForRegion(hub) {
+      if (!hub) return allCreators;
+      if (hub.id === "other") {
+        return allCreators.filter(c => {
+          const loc = (c.location || "").toLowerCase();
+          return !loc.includes("mumbai") && !loc.includes("bengaluru") && !loc.includes("delhi") && !loc.includes("pune") && !loc.includes("hyderabad") && !loc.includes("ahmedabad");
+        });
+      }
+      return allCreators.filter(c => {
+        const loc = (c.location || "").toLowerCase();
+        return hub.keywords.some(k => loc.includes(k));
+      });
+    }
+
+    function renderRegionHubs() {
+      const pillsContainer = document.getElementById("regionPillsGrid");
+      if (!pillsContainer) return;
+      pillsContainer.innerHTML = "";
+
+      TERRITORY_HUBS.forEach(hub => {
+        const creatorsInHub = getCreatorsForRegion(hub);
+        const isActive = activeRegionHub && activeRegionHub.id === hub.id;
+
+        let totalOutlay = 0;
+        let countRate = 0;
+        creatorsInHub.forEach(c => {
+          if (c.numericRate) { totalOutlay += c.numericRate; countRate++; }
+        });
+        const avg = countRate > 0 ? Math.round(totalOutlay / countRate) : 0;
+
+        const card = document.createElement("div");
+        card.className = `p-4 rounded-2xl border cursor-pointer transition shadow-sm flex flex-col justify-between space-y-2 ${isActive ? 'bg-indigo-600 text-white border-indigo-600 ring-4 ring-indigo-500/20' : 'bg-white text-slate-800 border-slate-200 hover:border-indigo-300'}`;
+        card.onclick = () => {
+          activeRegionHub = hub;
+          renderRegionHubs();
+        };
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="text-[10px] uppercase font-bold tracking-wider ${isActive ? 'text-indigo-200' : 'text-slate-400'}">${hub.tag}</span>
+              <span class="${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'} text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
+                ${creatorsInHub.length} creators
+              </span>
+            </div>
+            <h4 class="font-black text-sm">${hub.name}</h4>
+          </div>
+          <div class="text-[11px] pt-1.5 border-t ${isActive ? 'border-indigo-500 text-indigo-100' : 'border-slate-100 text-slate-500'}">
+            <span>Avg Rate:</span> <strong class="${isActive ? 'text-white' : 'text-emerald-700'} font-mono">${avg > 0 ? '₹' + avg.toLocaleString('en-IN') : 'Quote based'}</strong>
+          </div>
+        `;
+        pillsContainer.appendChild(card);
+      });
+
+      renderActiveRegionCreators();
+    }
+
+    function renderActiveRegionCreators() {
+      const title = document.getElementById("selectedRegionHeaderTitle");
+      const countEl = document.getElementById("selectedRegionSubCount");
+      const badge = document.getElementById("activeRegionBadge");
+      const grid = document.getElementById("regionCreatorsGrid");
+
+      const creators = getCreatorsForRegion(activeRegionHub);
+
+      if (activeRegionHub) {
+        title.innerText = `Creators in ${activeRegionHub.name}`;
+        badge.innerText = activeRegionHub.name;
+      } else {
+        title.innerText = "Creators in All Territories";
+        badge.innerText = "All Territories";
+      }
+
+      countEl.innerText = `Showing ${creators.length} registered influencers`;
+      grid.innerHTML = "";
+
+      if (creators.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-3 text-center py-12 text-slate-400">
+            <i class="fa-solid fa-location-dot text-3xl mb-2 text-slate-300"></i>
+            <p class="text-sm font-semibold">No creators found in this exact territory.</p>
+          </div>
+        `;
+        return;
+      }
+
+      creators.forEach(c => {
+        const isSelected = selectedCreatorIds.has(String(c.id));
+        let profileUrl = c.link && c.link.startsWith('http') ? c.link : (c.link ? 'https://instagram.com/' + c.link.replace('@','') : '#');
+
+        const card = document.createElement("div");
+        card.className = `p-4 rounded-2xl border transition bg-slate-50/60 hover:bg-white hover:shadow-sm space-y-3 ${isSelected ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-200'}`;
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="font-bold text-slate-900 text-sm">${c.handle}</div>
+              <div class="text-[11px] text-slate-500 font-medium">${c.category} • <span class="text-indigo-600 font-semibold">${c.location}</span></div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-200">
+                ${c.tier}
+              </span>
+              <button type="button" onclick="deleteCreator('${c.id}')" title="Delete Creator" class="text-slate-400 hover:text-red-600 p-1 transition">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-xs bg-white p-2.5 rounded-xl border border-slate-100">
+            <div>
+              <span class="text-[10px] text-slate-400 block font-semibold">Followers</span>
+              <span class="font-bold text-slate-800">${c.followers}</span>
+            </div>
+            <div>
+              <span class="text-[10px] text-slate-400 block font-semibold">Quoted Commercial</span>
+              <span class="font-bold text-emerald-700 font-mono">${c.commercial}</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1 text-xs">
+            <a href="${profileUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold text-[11px] inline-flex items-center gap-1">
+              <i class="fa-brands fa-instagram"></i> Profile
+            </a>
+            <button type="button" onclick="toggleSelectCreator('${c.id}'); renderActiveRegionCreators();" class="${isSelected ? 'bg-emerald-600 text-white' : 'bg-white text-indigo-700 border border-slate-200 hover:bg-indigo-50'} text-xs font-bold px-3 py-1.5 rounded-xl transition shadow-sm">
+              ${isSelected ? '<i class="fa-solid fa-check"></i> In Deck' : '<i class="fa-solid fa-plus"></i> Shortlist'}
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function resetRegionSelection() {
+      activeRegionHub = null;
+      renderRegionHubs();
+    }
+
+    function addAllRegionToDeck() {
+      const creators = getCreatorsForRegion(activeRegionHub);
+      if (creators.length === 0) return;
+      creators.forEach(c => selectedCreatorIds.add(String(c.id)));
+      saveSelectedDeck();
+      renderActiveRegionCreators();
+      alert(`Added ${creators.length} creators from ${activeRegionHub ? activeRegionHub.name : 'all regions'} to the deck!`);
+    }
+
+    function syncRegionWithMainTable() {
+      if (activeRegionHub && activeRegionHub.keywords.length > 0) {
+        document.getElementById("searchLocationInput").value = activeRegionHub.keywords[0];
+      } else {
+        document.getElementById("searchLocationInput").value = "";
+      }
+      switchView('creators');
+      applyFilters();
+    }
+
+    async function removeTeamMember(id) {
+      if(currentAuthUser.role!=='admin') return alert('Only administrators can remove users.');
+      const member=teamMembers.find(m=>String(m.id)===String(id));
+      if(!member || member.id===currentAuthUser.id) return;
+      if(!confirm(`Remove workspace access for ${member.name}?`)) return;
+      try {await database.ref('members/'+member.id).remove();}
+      catch(err) {return alert(err.message);}
+      teamMembers=teamMembers.filter(m=>String(m.id)!==String(id));
+      syncCloud('team_members',teamMembers);refreshTeamSelects();renderTeamTable();
+    }
+
+    function deleteCreator(id) {
+      const strId = String(id);
+      const c = allCreators.find(x => String(x.id) === strId);
+      if (!c) return;
+
+      if (confirm(`Delete creator "${c.handle}"?`)) {
+        deletedCreatorIds.add(strId);
+        syncCloud("deleted_creator_ids", Array.from(deletedCreatorIds));
+
+        customCreators = customCreators.filter(x => String(x.id) !== strId);
+        syncCloud("custom_creators", customCreators);
+
+        selectedCreatorIds.delete(strId);
+        delete deckCustomCosts[strId];
+        saveSelectedDeck();
+
+        refreshAllCreators();
+        applyFilters();
+        renderRegionHubs();
+      }
+    }
+
+    function clearAllProjects() {
+      if (!confirm(`Delete all ${brandCampaigns.length} projects? This only affects your private workspace.`)) return;
+      brandCampaigns = [];
+      syncProjects();
+      refreshTeamSelects(); renderBrandsList(); renderTeamTable(); updateKPIs();
+    }
+
+    function clearAllCreators() {
+      if (!confirm(`Delete all ${allCreators.length} creator records? This only affects your private workspace.`)) return;
+      deletedCreatorIds = new Set(INITIAL_ROSTER.map(c => String(c.id)));
+      customCreators = [];
+      selectedCreatorIds.clear(); deckCustomCosts = {};
+      syncCloud("deleted_creator_ids", Array.from(deletedCreatorIds));
+      syncCloud("custom_creators", []);
+      saveSelectedDeck();
+      refreshAllCreators(); applyFilters(); renderRegionHubs(); updateDeckFloatingBar();
+    }
+
+    function removeBrand(id) {
+      const b = brandCampaigns.find(x => x.id === id);
+      if (!b) return;
+
+      if (confirm(`Delete project "${b.name}"?`)) {
+        brandCampaigns = brandCampaigns.filter(x => x.id !== id);
+        syncProjects();
+
+        refreshTeamSelects();
+        renderBrandsList();
+        renderTeamTable();
+        updateKPIs();
+
+        const suggestSelect = document.getElementById("suggestBrandSelect");
+        if (suggestSelect && suggestSelect.value === id) {
+          suggestSelect.value = "";
+        }
+
+        alert(`Project "${b.name}" deleted.`);
+      }
+    }
+
+    function prefillSuggestFromBrand() {
+      const brandId = document.getElementById("suggestBrandSelect").value;
+      if (!brandId) return;
+      const b = brandCampaigns.find(x => x.id === brandId);
+      if (!b) return;
+
+      document.getElementById("aiBriefPrompt").value = b.brief;
+      document.getElementById("aiBriefNiche").value = b.category;
+      
+      const parsedBudget = parseNumericRate(b.budget);
+      if (parsedBudget) document.getElementById("aiBriefBudget").value = parsedBudget;
+
+      const loc = b.location.toLowerCase();
+      if (loc.includes("mumbai") || loc.includes("bombay")) document.getElementById("aiBriefLocation").value = "Mumbai";
+      else if (loc.includes("bengaluru") || loc.includes("bangalore")) document.getElementById("aiBriefLocation").value = "Bengaluru";
+      else if (loc.includes("pune")) document.getElementById("aiBriefLocation").value = "Pune";
+      else if (loc.includes("delhi") || loc.includes("gurgaon") || loc.includes("noida")) document.getElementById("aiBriefLocation").value = "Delhi NCR";
+      else if (loc.includes("hyderabad")) document.getElementById("aiBriefLocation").value = "Hyderabad";
+      else if (loc.includes("ahmedabad") || loc.includes("gujarat")) document.getElementById("aiBriefLocation").value = "Ahmedabad / Gujarat";
+
+      runAIRecommender();
+    }
+
+    function runAIRecommender() {
+      const brief = document.getElementById("aiBriefPrompt").value.trim().toLowerCase();
+      const niche = document.getElementById("aiBriefNiche").value.trim().toLowerCase();
+      const location = document.getElementById("aiBriefLocation").value.trim().toLowerCase();
+      const budgetCap = parseFloat(document.getElementById("aiBriefBudget").value);
+      const tier = document.getElementById("aiBriefTier").value.trim().toLowerCase();
+
+      if (!brief && !niche && !location && isNaN(budgetCap)) {
+        alert("Please enter a brief, niche, or location to run creator matching.");
+        return;
+      }
+
+      const stopWords = new Set(["need", "looking", "want", "for", "with", "and", "the", "reels", "stories", "post", "posts", "from", "based", "good", "top", "best", "some", "our", "their", "must", "have"]);
+      const rawWords = (brief + " " + niche).replace(/[^\w\s]/g, ' ').split(/\s+/);
+      const keywords = [...new Set(rawWords.filter(w => w.length > 2 && !stopWords.has(w)))];
+
+      const normalizeCity = (loc) => {
+        if (!loc) return "";
+        let s = loc.toLowerCase();
+        if (s.includes("mumbai") || s.includes("bombay") || s.includes("navi mumbai") || s.includes("thane")) return "mumbai";
+        if (s.includes("bengaluru") || s.includes("bangalore")) return "bengaluru";
+        if (s.includes("delhi") || s.includes("gurgaon") || s.includes("noida") || s.includes("ncr")) return "delhi ncr";
+        if (s.includes("pune")) return "pune";
+        if (s.includes("hyderabad")) return "hyderabad";
+        if (s.includes("ahmedabad") || s.includes("gujarat")) return "ahmedabad / gujarat";
+        if (s.includes("kolkata")) return "kolkata";
+        return s;
+      };
+
+      const targetCityNorm = normalizeCity(location);
+
+      const scored = allCreators.map(c => {
+        let score = 0;
+        let reasons = [];
+        const creatorCat = (c.category || "").toLowerCase();
+        const creatorDeliv = (c.deliverables || "").toLowerCase();
+        const creatorHandle = (c.handle || "").toLowerCase();
+        const creatorCityNorm = normalizeCity(c.location);
+
+        let categoryMatches = [];
+        keywords.forEach(kw => {
+          if (creatorCat.includes(kw)) {
+            score += 25;
+            categoryMatches.push(kw);
+          } else if (creatorDeliv.includes(kw) || creatorHandle.includes(kw)) {
+            score += 15;
+            categoryMatches.push(kw);
+          }
+        });
+
+        if (categoryMatches.length > 0) {
+          reasons.push(`Niche Match: ${[...new Set(categoryMatches)].slice(0, 3).join(", ")}`);
+        }
+
+        if (targetCityNorm) {
+          if (creatorCityNorm === targetCityNorm) {
+            score += 35;
+            reasons.push(`Target City Verified (${c.location})`);
+          } else if (c.location.toLowerCase().includes("all india") || !c.location) {
+            score += 10;
+            reasons.push(`Pan-India reach`);
+          } else {
+            score -= 30;
+          }
+        } else {
+          score += 10;
+        }
+
+        if (!isNaN(budgetCap)) {
+          if (c.numericRate) {
+            if (c.numericRate <= budgetCap) {
+              score += 25;
+              reasons.push(`Within Budget: ₹${c.numericRate.toLocaleString('en-IN')}`);
+            } else if (c.numericRate <= budgetCap * 1.15) {
+              score += 5;
+              reasons.push(`Near Budget: ₹${c.numericRate.toLocaleString('en-IN')}`);
+            } else {
+              score -= 40;
+            }
+          } else {
+            score += 10;
+          }
+        }
+
+        if (tier) {
+          if (c.tier.toLowerCase().includes(tier)) {
+            score += 20;
+            reasons.push(`Matches Tier (${c.tier})`);
+          }
+        }
+
+        if (c.rating && c.rating >= 4) {
+          score += 10;
+          reasons.push(`Highly Rated Creator (${c.rating}★)`);
+        }
+
+        return {
+          ...c,
+          matchScore: Math.min(99, Math.max(10, score)),
+          matchReasons: reasons.slice(0, 3)
+        };
+      });
+
+      aiSuggestedList = scored
+        .filter(c => c.matchScore >= 35)
+        .sort((a, b) => b.matchScore - a.matchScore);
+
+      renderSuggestedCards();
+    }
+
+    function renderSuggestedCards() {
+      const grid = document.getElementById("suggestedCardsGrid");
+      const countBadge = document.getElementById("suggestMatchCount");
+      const statusText = document.getElementById("aiMatcherStatusText");
+
+      countBadge.innerText = aiSuggestedList.length;
+      grid.innerHTML = "";
+
+      if (aiSuggestedList.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-3 text-center py-16 bg-white rounded-3xl border border-slate-200 text-slate-400">
+            <i class="fa-solid fa-triangle-exclamation text-3xl mb-2 text-amber-400"></i>
+            <p class="text-sm font-bold text-slate-700">No matching creators found for this brief</p>
+          </div>
+        `;
+        statusText.innerText = "No candidates found for these specific constraints.";
+        return;
+      }
+
+      statusText.innerText = `Identified ${aiSuggestedList.length} relevant creators aligned with your campaign brief!`;
+
+      aiSuggestedList.forEach((c) => {
+        const isSelected = selectedCreatorIds.has(String(c.id));
+        let profileUrl = c.link && c.link.startsWith('http') ? c.link : (c.link ? 'https://instagram.com/' + c.link.replace('@','') : '#');
+
+        const card = document.createElement("div");
+        card.className = `bg-white p-5 rounded-3xl border transition shadow-sm flex flex-col justify-between space-y-3 ${isSelected ? 'border-indigo-400 ring-2 ring-indigo-500/20 bg-indigo-50/20' : 'border-slate-200 hover:border-indigo-200'}`;
+        card.innerHTML = `
+          <div class="space-y-2.5">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h4 class="font-bold text-sm text-slate-900">${c.handle}</h4>
+                <span class="text-[11px] text-slate-400 font-medium">${c.location} • ${c.category}</span>
+              </div>
+              <span class="bg-indigo-600 text-white font-black text-xs px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-sm">
+                <i class="fa-solid fa-sparkles text-[10px] text-amber-300"></i> ${c.matchScore}% Match
+              </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+              <div>
+                <span class="text-[10px] text-slate-400 block font-semibold">Followers / Tier</span>
+                <span class="font-bold text-slate-800">${c.followers} (${c.tier})</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block font-semibold">Quoted Commercial</span>
+                <span class="font-bold text-emerald-700 font-mono">${c.commercial}</span>
+              </div>
+            </div>
+
+            ${c.matchReasons.length > 0 ? `
+              <div class="space-y-1">
+                ${c.matchReasons.map(r => `<div class="text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1"><i class="fa-solid fa-circle-check text-[9px]"></i> ${r}</div>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+            <a href="${profileUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1">
+              <i class="fa-brands fa-instagram"></i> Instagram
+            </a>
+            <button type="button" onclick="toggleSelectCreator('${c.id}'); renderSuggestedCards();" class="${isSelected ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'} text-xs font-bold px-3 py-1.5 rounded-xl shadow-sm transition flex items-center gap-1">
+              ${isSelected ? '<i class="fa-solid fa-check"></i> Added to Deck' : '<i class="fa-solid fa-plus"></i> Shortlist'}
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function addAllSuggestedToDeck() {
+      if (aiSuggestedList.length === 0) return;
+      aiSuggestedList.forEach(c => selectedCreatorIds.add(String(c.id)));
+      saveSelectedDeck();
+      renderSuggestedCards();
+      alert(`Added all ${aiSuggestedList.length} suggested creators to your presentation deck!`);
+    }
+
+    function resetRecommenderForm() {
+      document.getElementById("aiBriefPrompt").value = "";
+      document.getElementById("aiBriefNiche").value = "";
+      document.getElementById("aiBriefLocation").value = "";
+      document.getElementById("aiBriefBudget").value = "";
+      document.getElementById("aiBriefTier").value = "";
+      document.getElementById("suggestBrandSelect").value = "";
+      aiSuggestedList = [];
+      renderSuggestedCards();
+    }
+
+    function toggleSelectCreator(id) {
+      const strId = String(id);
+      if (selectedCreatorIds.has(strId)) {
+        selectedCreatorIds.delete(strId);
+      } else {
+        selectedCreatorIds.add(strId);
+      }
+      saveSelectedDeck();
+      renderCreatorsTable();
+    }
+
+    function toggleSelectAll(masterCheckbox) {
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = Math.min(start + PAGE_SIZE, filteredList.length);
+      const slice = filteredList.slice(start, end);
+
+      slice.forEach(c => {
+        if (masterCheckbox.checked) {
+          selectedCreatorIds.add(String(c.id));
+        } else {
+          selectedCreatorIds.delete(String(c.id));
+        }
+      });
+      saveSelectedDeck();
+      renderCreatorsTable();
+    }
+
+    function selectAllFiltered(selectAll) {
+      if (selectAll) {
+        filteredList.forEach(c => selectedCreatorIds.add(String(c.id)));
+      }
+      saveSelectedDeck();
+      renderCreatorsTable();
+    }
+
+    function clearSelection() {
+      selectedCreatorIds.clear();
+      saveSelectedDeck();
+      renderCreatorsTable();
+    }
+
+    function updateDeckFloatingBar() {
+      const bar = document.getElementById("selectionBar");
+      const count = selectedCreatorIds.size;
+      document.getElementById("selectedCountBadge").innerText = count;
+
+      if (count > 0) {
+        bar.classList.remove("hidden");
+        bar.classList.add("flex");
+
+        let total = 0;
+        allCreators.forEach(c => {
+          if (selectedCreatorIds.has(String(c.id))) {
+            total += getEffectiveDeckCost(c);
+          }
+        });
+        document.getElementById("floatingDeckOutlay").innerText = `₹${total.toLocaleString('en-IN')}`;
+      } else {
+        bar.classList.add("hidden");
+        bar.classList.remove("flex");
+      }
+      updateKPIs();
+    }
+
+    function handleDeckCostChange(creatorId, newCostStr) {
+      const strId = String(creatorId);
+      const val = parseFloat(newCostStr.replace(/[^0-9.]/g, ''));
+      if (!isNaN(val)) {
+        deckCustomCosts[strId] = val;
+      } else {
+        delete deckCustomCosts[strId];
+      }
+      saveSelectedDeck();
+      refreshDeckModalSummary();
+    }
+
+    function refreshDeckModalSummary() {
+      const selected = allCreators.filter(c => selectedCreatorIds.has(String(c.id)));
+      let totalOutlay = 0;
+      let countWithRate = 0;
+      let totalReach = 0;
+
+      selected.forEach(c => {
+        const cost = getEffectiveDeckCost(c);
+        if (cost > 0) {
+          totalOutlay += cost;
+          countWithRate++;
+        }
+        totalReach += (c.numericFollowers || 0);
+      });
+
+      document.getElementById("deckModalCount").innerText = selected.length;
+      document.getElementById("deckModalTotalBudget").innerText = `₹${totalOutlay.toLocaleString('en-IN')}`;
+      document.getElementById("deckModalAvgRate").innerText = countWithRate > 0 ? `Avg: ₹${Math.round(totalOutlay / countWithRate).toLocaleString('en-IN')}` : '—';
+      
+      let reachFormatted = totalReach >= 1000000 ? `${(totalReach / 1000000).toFixed(1)}M` : (totalReach >= 1000 ? `${Math.round(totalReach / 1000)}K` : totalReach.toString());
+      document.getElementById("deckModalReach").innerText = `${reachFormatted} Followers`;
+    }
+
+    function openDeckModal() {
+      const selected = allCreators.filter(c => selectedCreatorIds.has(String(c.id)));
+      if (selected.length === 0) {
+        alert("Please select at least one creator.");
+        return;
+      }
+
+      refreshDeckModalSummary();
+
+      const container = document.getElementById("deckContent");
+      container.innerHTML = "";
+
+      selected.forEach((c, index) => {
+        const effectiveCost = getEffectiveDeckCost(c);
+        const hasCustomCost = deckCustomCosts[String(c.id)] !== undefined;
+        let profileUrl = c.link && c.link.startsWith('http') ? c.link : (c.link ? 'https://instagram.com/' + c.link.replace('@','') : '#');
+
+        const card = document.createElement("div");
+        card.className = "pdf-card-item flex flex-col md:flex-row justify-between items-start md:items-center gap-3";
+        card.innerHTML = `
+          <div class="space-y-1 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="font-black text-slate-900 text-sm">#${index + 1}. ${c.handle}</span>
+              <span class="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-indigo-200">${c.tier}</span>
+            </div>
+            <div class="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+              <span><strong>Followers:</strong> ${c.followers || '—'}</span>
+              <span><strong>Niche:</strong> ${c.category || 'General'}</span>
+              <span><strong class="text-red-500">Location:</strong> ${c.location || 'Pan India'}</span>
+            </div>
+            <div class="text-xs text-slate-600 pt-0.5">
+              <span class="text-slate-400 font-semibold">Deliverables:</span> ${c.deliverables || 'Standard 1 Reel + 1 Story'}
+            </div>
+            <div class="text-[11px] text-slate-400 flex items-center gap-1.5 pt-0.5">
+              <span>Original Sheet Rate:</span>
+              <strong class="text-slate-600">${c.commercial || 'Not specified'}</strong>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-end gap-1.5 w-full md:w-auto border-t md:border-t-0 pt-2 md:pt-0">
+            <div class="text-right">
+              <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Deck Budget / Cost (₹)</label>
+              <div class="flex items-center gap-1">
+                <span class="text-xs text-slate-400 font-bold">₹</span>
+                <input type="number" value="${effectiveCost || ''}" placeholder="Set rate" oninput="handleDeckCostChange('${c.id}', this.value)" class="w-32 bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1 text-sm font-black text-emerald-700 font-mono text-right focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+              </div>
+              ${hasCustomCost ? '<span class="text-[9px] text-amber-600 font-semibold block">Custom rate applied</span>' : ''}
+            </div>
+            <div class="flex items-center gap-2 no-print">
+              ${c.link ? `<a href="${profileUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800 text-xs font-semibold inline-flex items-center gap-1"><i class="fa-brands fa-instagram"></i> Profile</a>` : ''}
+              <button type="button" onclick="toggleSelectCreator('${c.id}'); openDeckModal();" class="text-red-500 hover:text-red-700 text-xs font-semibold p-1 hover:bg-red-50 rounded" title="Remove">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById("deckModal").classList.remove("hidden");
+      document.getElementById("deckModal").classList.add("flex");
+    }
+
+    function closeDeckModal() {
+      document.getElementById("deckModal").classList.add("hidden");
+      document.getElementById("deckModal").classList.remove("flex");
+    }
+
+    async function downloadDeckAsPDF() {
+      const source=document.getElementById('deckPrintableArea');
+      const title=document.getElementById('deckCampaignTitle').value.trim() || 'Influencer_Proposal';
+      const btn=document.getElementById('btnDownloadPDF');
+      const host=document.createElement('div');
+      host.style.cssText='position:absolute;left:0;top:0;width:700px;background:white;z-index:-1;pointer-events:none;';
+      const clone=source.cloneNode(true);
+      clone.style.setProperty('width','700px','important');
+      clone.style.setProperty('max-width','700px','important');
+      clone.style.height='auto';clone.style.overflow='visible';
+      clone.querySelectorAll('input,textarea,select').forEach((input,i)=>{
+        const original=source.querySelectorAll('input,textarea,select')[i];
+        const text=document.createElement('span');text.className=input.className;
+        text.textContent=original.value || original.placeholder || '';
+        text.style.cssText='display:block;white-space:normal;overflow-wrap:anywhere;height:auto;';
+        input.replaceWith(text);
+      });
+      clone.querySelectorAll('button').forEach(el=>el.remove());
+      clone.querySelectorAll('[id]').forEach(el=>el.removeAttribute('id'));clone.removeAttribute('id');
+      clone.querySelectorAll('a').forEach(el=>{el.style.overflowWrap='anywhere';});
+      host.appendChild(clone);document.body.appendChild(host);
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Rendering PDF...';
+      try {
+        await document.fonts.ready;
+        await html2pdf().set({margin:[12,12,12,12],filename:title.replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf',
+          image:{type:'jpeg',quality:0.98},html2canvas:{scale:1.5,useCORS:true,logging:false,scrollX:0,scrollY:0,windowWidth:1000},
+          jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy'],avoid:['.pdf-card-item','.pdf-header-block']}
+        }).from(clone).save();
+      } catch(err) {alert('PDF Generation Error: '+err.message);}
+      finally {host.remove();btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-file-pdf"></i> Export as Clean PDF';}
+    }
+    function openEmailModal() {
+      document.getElementById('emailFrom').value=currentAuthUser?.email || '';
+      document.getElementById('emailSubject').value=document.getElementById('deckCampaignTitle').value;
+      document.getElementById('emailModal').classList.remove('hidden');
+    }
+    function composeDashboardEmail(event) {
+      event.preventDefault();
+      const from=document.getElementById('emailFrom').value.trim();
+      const to=document.getElementById('emailTo').value.trim();
+      const subject=document.getElementById('emailSubject').value;
+      const body=document.getElementById('emailBody').value;
+      const query=new URLSearchParams({authuser:from,view:'cm',fs:'1',to,su:subject,body});
+      window.open('https://mail.google.com/mail/?'+query.toString(),'_blank','noopener,noreferrer');
+    }
+
+    function copyDeckExecutiveSummary() {
+      const selected = allCreators.filter(c => selectedCreatorIds.has(String(c.id)));
+      const campaignTitle = document.getElementById("deckCampaignTitle").value || "Influencer Proposal";
+      const clientName = document.getElementById("deckClientName").value || "Client";
+
+      let text = `=====================================\n`;
+      text += `BRIKKIN - ${campaignTitle.toUpperCase()} (${clientName})\n`;
+      text += `Influencer Marketing OS\n`;
+      text += `=====================================\n\n`;
+
+      let totalOutlay = 0;
+      selected.forEach((c, idx) => {
+        let profileUrl = c.link && c.link.startsWith('http') ? c.link : (c.link ? 'https://instagram.com/' + c.link.replace('@','') : 'N/A');
+        const cost = getEffectiveDeckCost(c);
+        totalOutlay += cost;
+        text += `${idx + 1}. ${c.handle}\n`;
+        text += `   Followers: ${c.followers} (${c.tier})\n`;
+        text += `   Niche: ${c.category} | Location: ${c.location}\n`;
+        text += `   Deliverables: ${c.deliverables || '1 Reel + 1 Story'}\n`;
+        text += `   Deck Cost: ₹${cost.toLocaleString('en-IN')}\n`;
+        text += `   Instagram: ${profileUrl}\n\n`;
+      });
+
+      text += `-------------------------------------\n`;
+      text += `Total Shortlisted: ${selected.length} Creators\n`;
+      text += `Total Cost: ₹${totalOutlay.toLocaleString('en-IN')}\n`;
+      text += `=====================================\n`;
+
+      navigator.clipboard.writeText(text);
+      alert("Proposal summary copied to clipboard!");
+    }
+
+    function exportDeckAsCSV() {
+      const selected = allCreators.filter(c => selectedCreatorIds.has(String(c.id)));
+      let csv = "Deck_Index,Creator_Handle,Instagram_Profile,Followers,Tier,Niche,Location,Deck_Cost_INR,Excel_Commercials,Deliverables,Phone\n";
+      selected.forEach((c, idx) => {
+        const cost = getEffectiveDeckCost(c);
+        csv += `"${idx + 1}","${c.handle}","${c.link || ''}","${c.followers}","${c.tier}","${c.category}","${c.location}","${cost}","${c.commercial}","${c.deliverables || ''}","${canContact() ? c.contact : ''}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'brikkin_Shortlisted_Deck.csv');
+      a.click();
+    }
+
+    function applyFilters() {
+      const q = document.getElementById("searchInput").value.toLowerCase().trim();
+      const locSearch = document.getElementById("searchLocationInput").value.toLowerCase().trim();
+      const tier = document.getElementById("filterTier").value;
+      const cityDropdown = document.getElementById("filterCity").value.toLowerCase().trim();
+
+      const expandLocationAliases = (txt) => {
+        if (!txt) return [];
+        let tokens = [txt];
+        if (txt.includes("mumbai") || txt.includes("bombay") || txt.includes("thane") || txt.includes("navi mumbai")) tokens.push("mumbai", "bombay", "thane");
+        if (txt.includes("bengaluru") || txt.includes("bangalore")) tokens.push("bengaluru", "bangalore");
+        if (txt.includes("delhi") || txt.includes("gurgaon") || txt.includes("gurugram") || txt.includes("noida") || txt.includes("ncr")) tokens.push("delhi", "gurgaon", "noida", "ncr");
+        if (txt.includes("ahmedabad") || txt.includes("gujarat")) tokens.push("ahmedabad", "gujarat");
+        return tokens;
+      };
+
+      const searchLocTokens = expandLocationAliases(locSearch);
+      const dropdownLocTokens = expandLocationAliases(cityDropdown);
+
+      filteredList = allCreators.filter(c => {
+        const cLoc = (c.location || "").toLowerCase();
+        const matchesQ = !q || c.handle.toLowerCase().includes(q) || c.category.toLowerCase().includes(q) || cLoc.includes(q) || c.contact.toLowerCase().includes(q);
+
+        let matchesLocation = true;
+        if (locSearch) matchesLocation = searchLocTokens.some(token => cLoc.includes(token));
+
+        let matchesCityDropdown = true;
+        if (cityDropdown) matchesCityDropdown = dropdownLocTokens.some(token => cLoc.includes(token));
+
+        const matchesTier = !tier || c.tier.toLowerCase().includes(tier.toLowerCase());
+
+        return matchesQ && matchesLocation && matchesCityDropdown && matchesTier;
+      });
+
+      currentPage = 1;
+      renderCreatorsTable();
+    }
+
+    function renderCreatorsTable() {
+      const tbody = document.getElementById("creatorTableBody");
+      const total = filteredList.length;
+      document.getElementById("recordBadge").innerText = `Showing ${total} Creators`;
+
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const end = Math.min(start + PAGE_SIZE, total);
+      const slice = filteredList.slice(start, end);
+
+      document.getElementById("pageSummary").innerText = total > 0 ? `Showing ${start + 1} to ${end} of ${total} creators` : "No creators found";
+      document.getElementById("currentPageNum").innerText = currentPage;
+      document.getElementById("btnPrev").disabled = (currentPage === 1);
+      document.getElementById("btnNext").disabled = (end >= total);
+
+      const allSelectedOnPage = slice.length > 0 && slice.every(c => selectedCreatorIds.has(String(c.id)));
+      document.getElementById("selectAllCheckbox").checked = allSelectedOnPage;
+
+      tbody.innerHTML = "";
+      if (slice.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-12 text-slate-400">No creators found matching filter.</td></tr>`;
+        return;
+      }
+
+      slice.forEach(c => {
+        const tr = document.createElement("tr");
+        const isSelected = selectedCreatorIds.has(String(c.id));
+        tr.className = `hover:bg-slate-50 transition border-b border-slate-100 ${isSelected ? 'bg-indigo-50/60 font-semibold' : ''}`;
+
+        let starsHtml = '';
+        for (let i = 1; i <= 5; i++) {
+          const starClass = i <= c.rating ? 'text-amber-400 fa-solid' : 'text-slate-300 fa-regular';
+          starsHtml += `<i class="${starClass} fa-star cursor-pointer hover:text-amber-500 text-xs" onclick="setCreatorRating('${c.id}', ${i})" title="Rate"></i>`;
+        }
+
+        let igLinkHtml = '<span class="text-slate-400 text-[11px] italic">No IG</span>';
+        if (c.link && c.link.startsWith('http')) {
+          igLinkHtml = `<a href="${c.link}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold text-[11px] inline-flex items-center gap-1"><i class="fa-brands fa-instagram"></i> Instagram</a>`;
+        } else if (c.link) {
+          let fixedLink = c.link.startsWith('www.') ? 'https://' + c.link : 'https://instagram.com/' + c.link.replace('@','');
+          igLinkHtml = `<a href="${fixedLink}" target="_blank" class="text-indigo-600 hover:text-indigo-800 font-semibold text-[11px] inline-flex items-center gap-1"><i class="fa-brands fa-instagram"></i> Instagram</a>`;
+        }
+
+        const cleanPhone = (c.contact || "").replace(/[^0-9]/g, '');
+        const waLink = cleanPhone.length >= 10 ? `https://wa.me/91${cleanPhone.slice(-10)}?text=${encodeURIComponent(`Hi ${c.handle}, reaching out from brikkin regarding a collaboration!`)}` : null;
+
+        tr.innerHTML = `
+          <td class="py-3 px-3 text-center">
+            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleSelectCreator('${c.id}')" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer" />
+          </td>
+          <td class="py-3 px-3">
+            ${isSelected ? 
+              `<span class="bg-indigo-600 text-white font-black text-[10px] px-2 py-0.5 rounded-full inline-flex items-center gap-1"><i class="fa-solid fa-check"></i> In Deck</span>` : 
+              `<button type="button" onclick="toggleSelectCreator('${c.id}')" class="text-[10px] font-bold text-slate-500 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 px-2 py-0.5 rounded-full border border-slate-200 transition">+ Add</button>`
+            }
+          </td>
+          <td class="py-3 px-3">
+            <div class="font-bold text-slate-900">${c.handle}</div>
+            <div class="text-[10px] text-slate-400 font-medium">${c.team_source}</div>
+          </td>
+          <td class="py-3 px-3">
+            <div class="flex items-center gap-1">${starsHtml}</div>
+          </td>
+          <td class="py-3 px-3">
+            <div class="font-bold text-slate-800">${c.followers || '—'}</div>
+            <div class="text-[10px] text-slate-400 font-medium">${c.tier || ''}</div>
+          </td>
+          <td class="py-3 px-3">
+            <span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium border border-slate-200 max-w-[130px] inline-block truncate" title="${c.category}">${c.category || 'General'}</span>
+          </td>
+          <td class="py-3 px-3 bg-red-50/20 border-x border-red-100">
+            <span class="font-bold text-slate-800 text-xs flex items-center gap-1 cursor-pointer hover:text-indigo-600" onclick="quickFilterCity('${c.location}')" title="Filter city">
+              <i class="fa-solid fa-location-dot text-red-500 text-[10px]"></i> ${c.location || 'All India'}
+            </span>
+          </td>
+          <td class="py-3 px-3 bg-amber-50/30 border-r border-amber-100">
+            <div class="font-bold text-slate-900 font-mono text-[11px]">${c.commercial || 'Quote on Request'}</div>
+            <div class="flex items-center gap-1 mt-0.5">
+              ${c.numericRate ? `<span class="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 border border-emerald-300 px-1.5 py-0.2 rounded font-mono">₹${c.numericRate.toLocaleString('en-IN')}</span>` : ''}
+            </div>
+          </td>
+          <td class="py-3 px-3">
+            <div class="flex items-center gap-2">
+              ${waLink ? `<a href="${waLink}" target="_blank" title="WhatsApp" class="text-emerald-600 hover:text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1"><i class="fa-brands fa-whatsapp text-xs"></i> Chat</a>` : ''}
+              <div>${igLinkHtml}</div>
+            </div>
+          </td>
+          <td class="py-3 px-3 text-right space-x-1">
+            <button type="button" onclick="toggleSelectCreator('${c.id}')" class="${isSelected ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'} text-xs font-bold px-2 py-1 rounded-lg border transition">
+              ${isSelected ? 'Remove' : 'Select'}
+            </button>
+            <button type="button" onclick="deleteCreator('${c.id}')" title="Delete" class="text-slate-400 hover:text-red-600 p-1.5 rounded bg-slate-100 hover:bg-red-50 transition">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      updateDeckFloatingBar();
+    }
+
+    function changePage(delta) {
+      const maxPage = Math.ceil(filteredList.length / PAGE_SIZE) || 1;
+      currentPage = Math.max(1, Math.min(maxPage, currentPage + delta));
+      renderCreatorsTable();
+    }
+
+    function renderBrandsList() {
+      const grid = document.getElementById("brandsListGrid");
+      grid.innerHTML = "";
+      if (brandCampaigns.length === 0) {
+        grid.innerHTML = `<div class="col-span-3 text-center py-16 bg-white rounded-3xl border border-slate-200 text-slate-400">No projects found.</div>`;
+        return;
+      }
+
+      brandCampaigns.forEach(b => {
+        const card = document.createElement("div");
+        card.className = "bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-4 hover:border-slate-300 transition";
+        card.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h3 class="font-bold text-sm text-slate-900">${b.name}</h3>
+                <span class="text-[11px] text-slate-400 font-medium">${b.category} • <strong class="text-red-500">${b.location}</strong></span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">${b.status}</span>
+                <button type="button" onclick="removeBrand('${b.id}')" title="Delete" class="text-slate-400 hover:text-red-600 p-1 rounded hover:bg-red-50 transition"><i class="fa-solid fa-trash-can text-xs"></i></button>
+              </div>
+            </div>
+            <p class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 leading-relaxed">${b.brief}</p>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t text-xs">
+            <span class="font-bold text-amber-600 font-mono">${b.budget} / creator</span>
+            <button type="button" onclick="switchView('suggest'); document.getElementById('suggestBrandSelect').value = '${b.id}'; prefillSuggestFromBrand();" class="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1">
+              <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> AI Match &rarr;
+            </button>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    let memberPermissions={};
+    function listenMemberPermissions() {
+      if(!currentAuthUser || currentAuthUser.role!=='admin') return;
+      database.ref('members').on('value',snap=>{memberPermissions=snap.val() || {};renderTeamTable();});
+    }
+    function renderTeamTable() {
+      const tbody = document.getElementById("teamTableBody");
+      tbody.innerHTML = "";
+      teamMembers.forEach(m => {
+        const assignedBrands = brandCampaigns.filter(b => b.assignee.toLowerCase() === m.name.toLowerCase());
+        const pipelineCount = allCreators.filter(c => c.team_source.toLowerCase() === m.name.toLowerCase()).length;
+        const isSelf = currentAuthUser && currentAuthUser.id === m.id;
+
+        const tr = document.createElement("tr");
+        tr.className = "border-b border-slate-100 hover:bg-slate-50 transition";
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-bold text-slate-900">
+            ${m.name} <span class="text-slate-400 font-mono text-[11px]">(@${m.userId})</span>
+            ${isSelf ? '<span class="ml-1 bg-indigo-100 text-indigo-700 text-[9px] font-bold px-1.5 py-0.5 rounded">You</span>' : ''}
+          </td>
+          <td class="py-3 px-3">${m.role}</td>
+          <td class="py-3 px-3">
+            ${assignedBrands.length > 0 ? assignedBrands.map(b => `<span class="bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold px-1.5 py-0.5 rounded mr-1">${b.name}</span>`).join('') : '<span class="text-slate-400 text-xs">None</span>'}
+          </td>
+          <td class="py-3 px-3 font-mono font-bold">${pipelineCount} creators</td>
+          <td class="py-3 px-3 text-slate-500">${m.email || 'N/A'}</td>
+          <td class="py-3 px-3 text-right">
+            ${currentAuthUser.role==='admin' && !isSelf ? `
+              <button type="button" onclick="setContactAccess('${m.id}',${!memberPermissions[m.id]?.canContact})" class="text-xs px-2 py-1 rounded border ${memberPermissions[m.id]?.canContact ? 'text-emerald-700' : 'text-slate-500'}">WhatsApp: ${memberPermissions[m.id]?.canContact ? 'Allowed' : 'Blocked'}</button>
+              <button type="button" onclick="removeTeamMember('${m.id}')" title="Delete" class="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"><i class="fa-solid fa-trash-can"></i></button>
+            ` : '<span class="text-slate-300 text-xs">Active Session</span>'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function openAddBrandModal() { document.getElementById("brandModal").classList.remove("hidden"); document.getElementById("brandModal").classList.add("flex"); }
+    function closeAddBrandModal() { document.getElementById("brandModal").classList.add("hidden"); document.getElementById("brandModal").classList.remove("flex"); }
+    function handleBrandSubmit(e) {
+      e.preventDefault();
+      const bData = {
+        id: "b_" + Date.now(),
+        name: document.getElementById("bName").value.trim(),
+        assignee: document.getElementById("bAssignee").value,
+        category: document.getElementById("bCategory").value.trim(),
+        budget: document.getElementById("bBudget").value.trim() || "Quote based",
+        location: document.getElementById("bLocation").value.trim() || "Pan India",
+        brief: document.getElementById("bBrief").value.trim(),
+        status: document.getElementById("bStatus").value
+      };
+      brandCampaigns.unshift(bData);
+      syncProjects();
+      closeAddBrandModal();
+      refreshTeamSelects();
+      renderBrandsList();
+      updateKPIs();
+    }
+
+    function openAddMemberModal() { if(currentAuthUser.role!=="admin") return alert("Only administrators can add users."); document.getElementById("memberModal").classList.remove("hidden"); document.getElementById("memberModal").classList.add("flex"); }
+    function closeAddMemberModal() { document.getElementById("memberModal").classList.add("hidden"); document.getElementById("memberModal").classList.remove("flex"); }
+    async function handleMemberSubmit(e) {
+      e.preventDefault();
+      if(currentAuthUser.role!=='admin') return alert('Only administrators can add users.');
+      const name=document.getElementById('mName').value.trim();
+      const email=document.getElementById('mEmail').value.trim().toLowerCase();
+      const password=document.getElementById('mPassword').value;
+      const existingUid=document.getElementById('mExistingUid').value.trim();
+      const userId=document.getElementById('mUserId').value.trim();
+      const role=document.getElementById('mRole').value.trim();
+      if(!email.includes('@') || !name) return alert('Enter the exact Firebase Auth email and a name.');
+      if(!existingUid && password.length<12) return alert('For a new user, enter a temporary password of at least 12 characters.');
+      let secondary=null;
+      try {
+        let uid=existingUid;
+        if(!uid) {
+          secondary=firebase.initializeApp(firebaseConfig,'create_'+Date.now());
+          const credential=await secondary.auth().createUserWithEmailAndPassword(email,password);
+          uid=credential.user.uid;
+        }
+        if(uid===currentAuthUser.id) throw new Error('This is the administrator account.');
+        await database.ref('members/'+uid).set({name,email,role:'member',canContact:false});
+        const member={id:uid,userId,name,role,email};
+        teamMembers=[...teamMembers.filter(m=>m.id!==uid),member];
+        await syncCloud('team_members',teamMembers);
+        closeAddMemberModal();document.getElementById('memberForm').reset();refreshTeamSelects();renderTeamTable();
+        alert(existingUid ? `${name} can now sign in with their existing Firebase password.` : `${name} can sign in with ${email} and the temporary password you set.`);
+      } catch(err) {alert('Could not add member: '+err.message);}
+      finally {if(secondary) await secondary.delete();}
+    }
+
+    function openAddCreatorModal() { document.getElementById("addCreatorModal").classList.remove("hidden"); document.getElementById("addCreatorModal").classList.add("flex"); }
+    function closeAddCreatorModal() { document.getElementById("addCreatorModal").classList.add("hidden"); document.getElementById("addCreatorModal").classList.remove("flex"); }
+    async function handleAddCreatorSubmit(e) {
+      e.preventDefault();
+      const commStr = document.getElementById("fCommercial").value.trim() || "Quote on Request";
+      const newCreator = {
+        id: "c_" + Date.now(),
+        handle: document.getElementById("fHandle").value.trim(),
+        link: document.getElementById("fLink").value.trim(),
+        followers: document.getElementById("fFollowers").value.trim(),
+        tier: document.getElementById("fTier").value,
+        category: document.getElementById("fCategory").value.trim(),
+        location: document.getElementById("fLocation").value.trim(),
+        commercial: commStr,
+        lastPayment: commStr,
+        numericRate: parseNumericRate(commStr),
+        deliverables: document.getElementById("fDeliverables").value.trim() || "1 Reel",
+        contact: document.getElementById("fContact").value.trim(),
+        team_source: currentAuthUser ? currentAuthUser.name : "Master sheet",
+        rating: 0
+      };
+      if(canContact() && newCreator.contact) await saveContact(newCreator.id,newCreator.contact);
+      delete newCreator.contact;
+      customCreators.unshift(newCreator);
+      syncCloud("custom_creators", customCreators);
+      
+      refreshAllCreators();
+      closeAddCreatorModal();
+      applyFilters();
+      renderRegionHubs();
+    }
+
+    function openBulkModal() { document.getElementById("bulkModal").classList.remove("hidden"); document.getElementById("bulkModal").classList.add("flex"); }
+    function closeBulkModal() { document.getElementById("bulkModal").classList.add("hidden"); document.getElementById("bulkModal").classList.remove("flex"); }
+    function handleBulkFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rawJson = XLSX.utils.sheet_to_json(firstSheet);
+          parsedBulkData = rawJson.map((row, idx) => {
+            const findKey = (keys) => {
+              for (let k of Object.keys(row)) {
+                const clean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+                if (keys.some(target => clean.includes(target))) return row[k];
+              }
+              return '';
+            };
+            const handle = findKey(['handle', 'influencer', 'name', 'creator']) || `Creator_${idx+1}`;
+            const link = findKey(['link', 'instagram', 'url', 'ig']) || '';
+            const followers = findKey(['follower', 'count', 'subs']) || '10K';
+            const tier = findKey(['tier', 'size']) || 'Micro (10K-100K)';
+            const location = findKey(['location', 'city', 'state', 'region']) || 'All India';
+            const category = findKey(['category', 'niche', 'genre']) || 'Lifestyle';
+            const commercial = findKey(['commercial', 'rate', 'price', 'lastpayment', 'cost', 'quoted']) || 'Quote on Request';
+            const contact = findKey(['contact', 'phone', 'whatsapp', 'number', 'mobile']) || '';
+            return {
+              id: "bulk_" + Date.now() + "_" + idx,
+              handle: String(handle).trim(),
+              link: String(link).trim(),
+              followers: String(followers).trim(),
+              tier: String(tier).trim(),
+              location: String(location).trim(),
+              category: String(category).trim(),
+              commercial: String(commercial).trim(),
+              lastPayment: String(commercial).trim(),
+              numericRate: parseNumericRate(String(commercial).trim()),
+              contact: String(contact).trim(),
+              deliverables: '1 Reel',
+              team_source: 'Bulk Import',
+              rating: 0
+            };
+          });
+          document.getElementById("bulkFileName").innerText = file.name;
+          document.getElementById("bulkRowCount").innerText = `${parsedBulkData.length} valid creators found`;
+          document.getElementById("bulkPreview").classList.remove("hidden");
+          document.getElementById("btnConfirmBulk").disabled = false;
+        } catch(err) { alert("Parsing error: " + err.message); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    async function confirmBulkUpload() {
+      if (parsedBulkData.length === 0) return;
+      const targetTab = document.getElementById("bulkAssignTab").value;
+      parsedBulkData.forEach(item => { item.team_source = targetTab; });
+
+      if(canContact()) {
+        try {await Promise.all(parsedBulkData.filter(item=>item.contact).map(item=>saveContact(item.id,item.contact)));}
+        catch(err) {return alert('Could not save private contact numbers: '+err.message);}
+      }
+      const imported=cleanPublicCreators(parsedBulkData);
+      const previous=customCreators;
+      try {
+        await syncCloud('custom_creators',[...imported,...customCreators]);
+        customCreators=[...imported,...previous];
+        parsedBulkData=[];
+        refreshAllCreators();closeBulkModal();switchView('creators');applyFilters();renderRegionHubs();
+        alert(`Imported ${imported.length} creators to your private workspace.`);
+      } catch(err) {
+        customCreators=previous;
+        alert('Bulk import was not saved. Check the Realtime Database rules and try again.');
+      }
+    }
+    auth.onAuthStateChanged(async user=>{
+      if(!user) return;
+      try {
+        await authorize(user);
+        showApp();listenSharedState();
+        if(currentAuthUser.role==='admin') migrateLegacyState().catch(err=>alert('Legacy data import needs attention: '+err.message));
+      } catch(err) {console.warn(err);document.getElementById('loginError').textContent=err.message;document.getElementById('loginError').classList.remove('hidden');}
+    });
+  </script>
+</body>
+</html>
